@@ -1,0 +1,449 @@
+@page "/hoadon"
+@inject IHoaDonService HoaDonService
+@inject IKhachHangService KhachHangService
+@inject IExportService ExportService
+@inject IJSRuntime JSRuntime
+@inject IHttpClientFactory HttpClientFactory
+@inject IConfiguration Configuration
+
+<PageTitle>Danh sách hóa đơn</PageTitle>
+
+<h2>💳 Danh sách hóa đơn</h2>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <strong>❌ Lỗi!</strong> @errorMessage
+        <button type="button" class="btn-close" @onclick="@(() => errorMessage = string.Empty)"></button>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(successMessage))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <strong>✅ Thành công!</strong> @successMessage
+        <button type="button" class="btn-close" @onclick="@(() => successMessage = string.Empty)"></button>
+    </div>
+}
+
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label>Từ ngày:</label>
+                <input type="date" class="form-control" @bind="tuNgay" />
+            </div>
+            <div class="col-md-4">
+                <label>Đến ngày:</label>
+                <input type="date" class="form-control" @bind="denNgay" />
+            </div>
+            <div class="col-md-4">
+                <label>&nbsp;</label>
+                <button class="btn btn-primary w-100" @onclick="LoadHoaDonsByDateRange">Lọc</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* Tab Navigation *@
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "all" ? "active" : "")" @onclick='() => SetActiveTab("all")'>
+            Tất cả
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "paid" ? "active" : "")" @onclick='() => SetActiveTab("paid")'>
+            Đã thanh toán
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link @(activeTab == "unpaid" ? "active" : "")" @onclick='() => SetActiveTab("unpaid")'>
+            Chưa thanh toán
+        </button>
+    </li>
+</ul>
+
+@if (hoaDons == null)
+{
+    <p><em>Đang tải...</em></p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Mã HD</th>
+                    <th>Bàn</th>
+                    <th>Thời gian</th>
+                    <th>Tổng tiền</th>
+                    <th>Trạng thái</th>
+                    <th>Phương thức thanh toán</th>
+                    <th>Khách hàng</th>
+                    <th>Nhân viên</th>
+                    <th>Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var hd in filteredHoaDons)
+                {
+                    <tr>
+                        <td><strong>#@hd.MaHD</strong></td>
+                        <td>@hd.TenBan</td>
+                        <td>@hd.ThoiGianTao.ToString("HH:mm dd/MM/yyyy")</td>
+                        <td><strong class="text-success">@hd.TongTien.ToString("N0") ₫</strong></td>
+                        <td>
+                            <span class="badge @GetStatusClass(hd.TrangThai)">@hd.TrangThai</span>
+                        </td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(hd.PhuongThucThanhToan))
+                            {
+                                var paymentIcon = hd.PhuongThucThanhToan switch
+                                {
+                                    "Qua ngân hàng" => "🏦",
+                                    "Thanh toán bằng điểm" => "⭐",
+                                    _ => "💵"
+                                };
+                                var paymentBadgeClass = hd.PhuongThucThanhToan switch
+                                {
+                                    "Qua ngân hàng" => "bg-info",
+                                    "Thanh toán bằng điểm" => "bg-warning",
+                                    _ => "bg-secondary"
+                                };
+                                <span class="badge @paymentBadgeClass">
+                                    @paymentIcon @hd.PhuongThucThanhToan
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">-</span>
+                            }
+                        </td>
+                        <td>@(hd.TenKH ?? "-")</td>
+                        <td>@(hd.TenNV ?? "-")</td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                @if (hd.TrangThai == "Chưa thanh toán")
+                                {
+                                    <button class="btn btn-sm btn-success" @onclick='() => ShowPaymentMethodModal(hd)'>
+                                        Thanh toán
+                                    </button>
+                                }
+                                <button class="btn btn-sm btn-danger" @onclick='() => ExportToPdf(hd.MaHD)' title="Xuất PDF">
+                                    📄 PDF
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h6>Tổng số hóa đơn</h6>
+                    <h3>@filteredHoaDons.Count</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h6>Tổng doanh thu</h6>
+                    <h3 class="text-success">@filteredHoaDons.Where(h => h.TrangThai == "Đã thanh toán").Sum(h => h.TongTien).ToString("N0") ₫</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Modal chọn phương thức thanh toán *@
+@if (showPaymentModal && selectedHoaDon != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5); z-index: 1060;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-coffee text-white">
+                    <h5 class="modal-title">💳 Chọn phương thức thanh toán</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="ClosePaymentModal"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <h5 class="mb-4">Hóa đơn #@selectedHoaDon.MaHD - Tổng tiền: <span class="text-success">@selectedHoaDon.TongTien.ToString("N0") ₫</span></h5>
+                    
+                    @* Thông tin khách hàng *@
+                    <div class="mb-4" style="text-align: left;">
+                        <h6 class="mb-3">📝 Thông tin khách hàng (tùy chọn)</h6>
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-6">
+                                <label class="form-label">Số điện thoại:</label>
+                                <input type="text" class="form-control" value="@customerPhone" 
+                                       placeholder="Nhập số điện thoại để tích điểm" 
+                                       @oninput="async (ChangeEventArgs e) => { customerPhone = e.Value?.ToString() ?? string.Empty; await CheckCustomerByPhone(); }" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Tên khách hàng:</label>
+                                <input type="text" class="form-control" @bind="customerName" 
+                                       placeholder="Nhập tên để xuất hóa đơn" />
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(customerInfoMessage))
+                        {
+                            <div class="alert alert-info alert-sm mb-2" style="font-size: 0.85rem; padding: 0.5rem;">
+                                @customerInfoMessage
+                            </div>
+                        }
+                    </div>
+                    
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <div class="card payment-method-card @(selectedPaymentMethod == "Tiền mặt" ? "selected" : "")" 
+                                 style="cursor: pointer; border: 2px solid @(selectedPaymentMethod == "Tiền mặt" ? "var(--coffee-primary)" : "#dee2e6");"
+                                 @onclick='() => selectedPaymentMethod = "Tiền mặt"'>
+                                <div class="card-body">
+                                    <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">💵</div>
+                                    <h6>Tiền mặt</h6>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="card payment-method-card @(selectedPaymentMethod == "Qua ngân hàng" ? "selected" : "")" 
+                                 style="cursor: pointer; border: 2px solid @(selectedPaymentMethod == "Qua ngân hàng" ? "var(--coffee-primary)" : "#dee2e6");"
+                                 @onclick='() => selectedPaymentMethod = "Qua ngân hàng"'>
+                                <div class="card-body">
+                                    <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🏦</div>
+                                    <h6>Qua ngân hàng</h6>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (selectedPaymentMethod == "Qua ngân hàng")
+                    {
+                        <div class="mt-4 p-3" style="background: #f8f9fa; border-radius: 8px;">
+                            <p class="mb-2"><strong>Quét mã QR để thanh toán:</strong></p>
+                            <img src="https://img.vietqr.io/image/vietinbank-101879989921-compact.jpg" 
+                                 alt="QR Code thanh toán" 
+                                 style="max-width: 250px; height: auto; border: 1px solid #dee2e6; border-radius: 8px;" />
+                            <p class="mt-2 text-muted" style="font-size: 0.85rem;">
+                                Ngân hàng: VietinBank<br />
+                                Số tài khoản: 101879989921
+                            </p>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer" style="justify-content: center;">
+                    <button type="button" class="btn btn-secondary" @onclick="ClosePaymentModal">Hủy</button>
+                    <button type="button" class="btn btn-success" @onclick="ConfirmPayment" disabled="@(string.IsNullOrEmpty(selectedPaymentMethod))">
+                        Xác nhận thanh toán
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<HoaDonDto>? hoaDons;
+    private List<HoaDonDto> filteredHoaDons = new();
+    private string errorMessage = string.Empty;
+    private string successMessage = string.Empty;
+    private DateTime tuNgay = DateTime.Today.AddDays(-7);
+    private DateTime denNgay = DateTime.Today;
+    private string activeTab = "all";
+    private bool showPaymentModal = false;
+    private HoaDonDto? selectedHoaDon = null;
+    private string selectedPaymentMethod = string.Empty;
+    private string customerPhone = string.Empty;
+    private string customerName = string.Empty;
+    private string customerInfoMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadHoaDonsByDateRange();
+    }
+
+    private async Task LoadHoaDonsByDateRange()
+    {
+        try
+        {
+            // Thêm 23:59:59 vào denNgay để bao gồm toàn bộ ngày
+            var denNgayFull = denNgay.Date.AddDays(1).AddSeconds(-1);
+            var result = await HoaDonService.GetHoaDonsByDateRangeAsync(tuNgay, denNgayFull);
+            hoaDons = result.ToList();
+            ApplyFilter();
+            Console.WriteLine($"Loaded {hoaDons.Count} hóa đơn từ {tuNgay} đến {denNgayFull}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi tải danh sách hóa đơn: {ex.Message}";
+        }
+    }
+
+    private void SetActiveTab(string tab)
+    {
+        activeTab = tab;
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        if (hoaDons == null)
+        {
+            filteredHoaDons = new List<HoaDonDto>();
+            return;
+        }
+
+        filteredHoaDons = activeTab switch
+        {
+            "paid" => hoaDons.Where(h => h.TrangThai == "Đã thanh toán").ToList(),
+            "unpaid" => hoaDons.Where(h => h.TrangThai == "Chưa thanh toán").ToList(),
+            _ => hoaDons.ToList()
+        };
+    }
+
+    private void ShowPaymentMethodModal(HoaDonDto hoaDon)
+    {
+        selectedHoaDon = hoaDon;
+        showPaymentModal = true;
+        selectedPaymentMethod = "Tiền mặt"; // Mặc định
+    }
+
+    private void ClosePaymentModal()
+    {
+        showPaymentModal = false;
+        selectedHoaDon = null;
+        selectedPaymentMethod = string.Empty;
+        customerPhone = string.Empty;
+        customerName = string.Empty;
+        customerInfoMessage = string.Empty;
+    }
+
+    private async Task CheckCustomerByPhone()
+    {
+        try
+        {
+            customerInfoMessage = string.Empty;
+            
+            if (string.IsNullOrWhiteSpace(customerPhone))
+            {
+                return;
+            }
+
+            var khachHang = await KhachHangService.GetKhachHangBySoDienThoaiAsync(customerPhone.Trim());
+            
+            if (khachHang != null)
+            {
+                customerName = khachHang.TenKH;
+                customerInfoMessage = $"✅ Tìm thấy khách hàng: {khachHang.TenKH} (Điểm tích lũy: {khachHang.DiemTichLuy})";
+            }
+            else
+            {
+                customerInfoMessage = "ℹ️ Khách hàng mới. Tên sẽ được tạo tự động nếu không nhập.";
+            }
+            
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            customerInfoMessage = $"⚠️ Lỗi khi kiểm tra: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private async Task ConfirmPayment()
+    {
+        try
+        {
+            if (selectedHoaDon == null || string.IsNullOrEmpty(selectedPaymentMethod)) return;
+
+            var confirmMessage = selectedPaymentMethod == "Qua ngân hàng" 
+                ? $"Xác nhận thanh toán hóa đơn #{selectedHoaDon.MaHD} qua ngân hàng với tổng tiền {selectedHoaDon.TongTien:N0} ₫?"
+                : $"Xác nhận thanh toán hóa đơn #{selectedHoaDon.MaHD} bằng tiền mặt với tổng tiền {selectedHoaDon.TongTien:N0} ₫?";
+
+            if (await JSRuntime.InvokeAsync<bool>("confirm", confirmMessage))
+            {
+                var thanhToanDto = new ThanhToanDto
+                {
+                    MaHD = selectedHoaDon.MaHD,
+                    MaKH = null, // Sẽ được xử lý trong service
+                    PhuongThucThanhToan = selectedPaymentMethod,
+                    SoDienThoai = string.IsNullOrWhiteSpace(customerPhone) ? null : customerPhone.Trim(),
+                    TenKH = string.IsNullOrWhiteSpace(customerName) ? null : customerName.Trim()
+                };
+
+                await HoaDonService.ThanhToanAsync(thanhToanDto);
+                var paymentMethodDisplay = selectedPaymentMethod == "Thanh toán bằng điểm" 
+                    ? "⭐ Thanh toán bằng điểm" 
+                    : selectedPaymentMethod;
+                successMessage = $"Thanh toán hóa đơn #{selectedHoaDon.MaHD} thành công bằng {paymentMethodDisplay}!";
+                errorMessage = string.Empty;
+                showPaymentModal = false;
+                selectedHoaDon = null;
+                selectedPaymentMethod = string.Empty;
+                customerPhone = string.Empty;
+                customerName = string.Empty;
+                customerInfoMessage = string.Empty;
+                await LoadHoaDonsByDateRange();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi thanh toán: {ex.Message}";
+            showPaymentModal = false;
+        }
+    }
+
+    private async Task ExportToPdf(int maHD)
+    {
+        try
+        {
+            errorMessage = string.Empty;
+            successMessage = string.Empty;
+            StateHasChanged();
+
+            // Lấy thông tin hóa đơn
+            var hoaDon = await HoaDonService.GetHoaDonByIdAsync(maHD);
+            if (hoaDon == null)
+            {
+                errorMessage = $"Không tìm thấy hóa đơn với mã {maHD}";
+                StateHasChanged();
+                return;
+            }
+
+            // Xuất PDF trực tiếp từ service (không cần gọi API)
+            var pdfBytes = await ExportService.ExportHoaDonToPdfAsync(hoaDon);
+            var base64String = Convert.ToBase64String(pdfBytes);
+            var fileName = $"HoaDon_{maHD}_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+            
+            await JSRuntime.InvokeVoidAsync("downloadFile", fileName, base64String, "application/pdf");
+            successMessage = $"Đã xuất PDF hóa đơn #{maHD} thành công!";
+            StateHasChanged();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            errorMessage = $"Không tìm thấy hóa đơn: {ex.Message}";
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi xuất PDF: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private string GetStatusClass(string trangThai)
+    {
+        return trangThai switch
+        {
+            "Chưa thanh toán" => "bg-warning",
+            "Đã thanh toán" => "bg-success",
+            "Đã hủy" => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+}
+

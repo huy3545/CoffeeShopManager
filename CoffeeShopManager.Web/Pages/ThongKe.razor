@@ -1,0 +1,202 @@
+@page "/thongke"
+@inject IThongKeService ThongKeService
+@inject IExportService ExportService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Thống kê doanh thu</PageTitle>
+
+<h2>📊 Thống kê doanh thu</h2>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <strong>❌ Lỗi!</strong> @errorMessage
+        <button type="button" class="btn-close" @onclick="@(() => errorMessage = string.Empty)"></button>
+    </div>
+}
+
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label>Từ ngày:</label>
+                <input type="date" class="form-control" @bind="tuNgay" />
+            </div>
+            <div class="col-md-3">
+                <label>Đến ngày:</label>
+                <input type="date" class="form-control" @bind="denNgay" />
+            </div>
+            <div class="col-md-3">
+                <label>&nbsp;</label>
+                <button class="btn btn-primary w-100" @onclick="LoadThongKe">Xem thống kê</button>
+            </div>
+            <div class="col-md-3">
+                <label>&nbsp;</label>
+                <button class="btn btn-success w-100" @onclick="ExportExcel">Xuất Excel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (doanhThuTheoNgay != null)
+{
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card shadow-coffee">
+                <div class="card-body text-center">
+                    <h6>Tổng doanh thu</h6>
+                    <h3 class="text-success">@tongDoanhThu.ToString("N0") ₫</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-coffee">
+                <div class="card-body text-center">
+                    <h6>Số hóa đơn</h6>
+                    <h3 style="color: #17a2b8;">@doanhThuTheoNgay.Sum(d => d.SoHoaDon)</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-coffee">
+                <div class="card-body text-center">
+                    <h6>Doanh thu TB/ngày</h6>
+                    <h3 style="color: #ffc107;">@((doanhThuTheoNgay.Count() > 0 ? tongDoanhThu / doanhThuTheoNgay.Count() : 0).ToString("N0")) ₫</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h4>Doanh thu theo ngày</h4>
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Ngày</th>
+                    <th>Số hóa đơn</th>
+                    <th>Doanh thu</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in doanhThuTheoNgay)
+                {
+                    <tr>
+                        <td>@item.Ngay.ToString("dd/MM/yyyy")</td>
+                        <td>@item.SoHoaDon</td>
+                        <td class="text-success"><strong>@item.TongDoanhThu.ToString("N0") ₫</strong></td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr style="font-weight: 700;">
+                    <td>TỔNG CỘNG</td>
+                    <td>@doanhThuTheoNgay.Sum(d => d.SoHoaDon)</td>
+                    <td class="text-success">@tongDoanhThu.ToString("N0") ₫</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+}
+
+@if (monBanChay != null && monBanChay.Any())
+{
+    <h4 class="mt-4">Top món bán chạy</h4>
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Tên món</th>
+                    <th>Số lượng bán</th>
+                    <th>Doanh thu</th>
+                </tr>
+            </thead>
+            <tbody>
+                @{
+                    int stt = 1;
+                    foreach (var mon in monBanChay)
+                    {
+                        <tr>
+                            <td><strong>@stt</strong></td>
+                            <td>@mon.TenMon</td>
+                            <td>@mon.SoLuongBan</td>
+                            <td class="text-success"><strong>@mon.DoanhThu.ToString("N0") ₫</strong></td>
+                        </tr>
+                        stt++;
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private IEnumerable<DoanhThuTheoNgayDto>? doanhThuTheoNgay;
+    private IEnumerable<MonBanChayDto>? monBanChay;
+    private decimal tongDoanhThu;
+    private string errorMessage = string.Empty;
+    private DateTime tuNgay = DateTime.Today.AddDays(-7);
+    private DateTime denNgay = DateTime.Today;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadThongKe();
+    }
+
+    private async Task LoadThongKe()
+    {
+        try
+        {
+            errorMessage = string.Empty;
+            
+            // Thêm 23:59:59 vào denNgay để bao gồm toàn bộ ngày
+            var denNgayFull = denNgay.Date.AddDays(1).AddSeconds(-1);
+            
+            doanhThuTheoNgay = await ThongKeService.GetDoanhThuTheoNgayAsync(tuNgay, denNgayFull);
+            tongDoanhThu = await ThongKeService.GetTongDoanhThuAsync(tuNgay, denNgayFull);
+            monBanChay = await ThongKeService.GetMonBanChayAsync(tuNgay, denNgayFull, 10);
+            
+            // Debug info
+            Console.WriteLine($"Từ ngày: {tuNgay}, Đến ngày: {denNgayFull}");
+            Console.WriteLine($"Loaded {doanhThuTheoNgay?.Count() ?? 0} ngày, tổng: {tongDoanhThu}");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi tải thống kê: {ex.Message}";
+            Console.WriteLine($"Error: {ex.Message}");
+            Console.WriteLine($"StackTrace: {ex.StackTrace}");
+        }
+    }
+
+    private async Task ExportExcel()
+    {
+        try
+        {
+            // Đảm bảo có dữ liệu
+            if (doanhThuTheoNgay == null || !doanhThuTheoNgay.Any())
+            {
+                await LoadThongKe();
+            }
+            
+            if (doanhThuTheoNgay == null || !doanhThuTheoNgay.Any())
+            {
+                errorMessage = "Không có dữ liệu trong khoảng thời gian này. Vui lòng tạo hóa đơn trước.";
+                return;
+            }
+
+            var title = $"BÁO CÁO DOANH THU TỪ {tuNgay:dd/MM/yyyy} ĐẾN {denNgay:dd/MM/yyyy}";
+            var excelData = await ExportService.ExportDoanhThuToExcelAsync(doanhThuTheoNgay, title);
+
+            // Trigger download
+            await JSRuntime.InvokeVoidAsync("downloadFile", 
+                $"DoanhThu_{tuNgay:yyyyMMdd}_{denNgay:yyyyMMdd}.xlsx", 
+                Convert.ToBase64String(excelData),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi xuất Excel: {ex.Message}";
+        }
+    }
+}
+

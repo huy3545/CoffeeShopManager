@@ -1,0 +1,243 @@
+@page "/nhanvien"
+@inject INhanVienService NhanVienService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Quản lý nhân viên</PageTitle>
+
+<h2>👥 Quản lý nhân viên</h2>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <strong>❌ Lỗi!</strong> @errorMessage
+        <button type="button" class="btn-close" @onclick="@(() => errorMessage = string.Empty)"></button>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(successMessage))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <strong>✅ Thành công!</strong> @successMessage
+        <button type="button" class="btn-close" @onclick="@(() => successMessage = string.Empty)"></button>
+    </div>
+}
+
+<button class="btn btn-primary mb-3" @onclick="ShowAddModal">
+    + Thêm nhân viên mới
+</button>
+
+@if (nhanViens == null)
+{
+    <p><em>Đang tải...</em></p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Mã NV</th>
+                    <th>Tên nhân viên</th>
+                    <th>Ca làm</th>
+                    <th>Số điện thoại</th>
+                    <th>Email</th>
+                    <th>Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var nv in nhanViens)
+                {
+                    <tr>
+                        <td><strong>#@nv.MaNV</strong></td>
+                        <td>@nv.TenNV</td>
+                        <td><span class="badge bg-primary">@nv.CaLam</span></td>
+                        <td>@(nv.SoDienThoai ?? "-")</td>
+                        <td>@(nv.Email ?? "-")</td>
+                        <td>
+                            <button class="btn btn-sm btn-warning" @onclick="() => ShowEditModal(nv)">Sửa</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => DeleteNhanVien(nv.MaNV)">Xóa</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<!-- Modal Thêm/Sửa Nhân Viên -->
+@if (showModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-coffee text-white">
+                    <h5 class="modal-title">@(isEditMode ? "Sửa nhân viên" : "Thêm nhân viên mới")</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Tên nhân viên <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" @bind="formTenNV" placeholder="Ví dụ: Nguyễn Văn A" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Ca làm <span class="text-danger">*</span></label>
+                        <select class="form-select" @bind="formCaLam">
+                            <option value="Sáng">Sáng (6:00 - 14:00)</option>
+                            <option value="Chiều">Chiều (14:00 - 22:00)</option>
+                            <option value="Tối">Tối (18:00 - 02:00)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Số điện thoại</label>
+                        <input type="tel" class="form-control" @bind="formSoDienThoai" placeholder="0901234567" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" @bind="formEmail" placeholder="example@coffee.com" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Hủy</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveNhanVien">
+                        @(isEditMode ? "Lưu" : "Thêm")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<NhanVienDto>? nhanViens;
+    private string errorMessage = string.Empty;
+    private string successMessage = string.Empty;
+    
+    // Modal states
+    private bool showModal = false;
+    private bool isEditMode = false;
+    private int? editingNVId = null;
+    private string formTenNV = string.Empty;
+    private string formCaLam = "Sáng";
+    private string formSoDienThoai = string.Empty;
+    private string formEmail = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadNhanViens();
+    }
+
+    private async Task LoadNhanViens()
+    {
+        try
+        {
+            var result = await NhanVienService.GetAllNhanViensAsync();
+            nhanViens = result.ToList();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi tải danh sách nhân viên: {ex.Message}";
+        }
+    }
+
+    private void ShowAddModal()
+    {
+        isEditMode = false;
+        editingNVId = null;
+        formTenNV = string.Empty;
+        formCaLam = "Sáng";
+        formSoDienThoai = string.Empty;
+        formEmail = string.Empty;
+        showModal = true;
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+    }
+
+    private void ShowEditModal(NhanVienDto nv)
+    {
+        isEditMode = true;
+        editingNVId = nv.MaNV;
+        formTenNV = nv.TenNV;
+        formCaLam = nv.CaLam;
+        formSoDienThoai = nv.SoDienThoai ?? string.Empty;
+        formEmail = nv.Email ?? string.Empty;
+        showModal = true;
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        isEditMode = false;
+        editingNVId = null;
+        formTenNV = string.Empty;
+        formCaLam = "Sáng";
+        formSoDienThoai = string.Empty;
+        formEmail = string.Empty;
+    }
+
+    private async Task SaveNhanVien()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(formTenNV))
+            {
+                errorMessage = "Tên nhân viên không được để trống!";
+                return;
+            }
+
+            if (isEditMode && editingNVId.HasValue)
+            {
+                // Update
+                var updateDto = new UpdateNhanVienDto
+                {
+                    TenNV = formTenNV,
+                    CaLam = formCaLam,
+                    SoDienThoai = formSoDienThoai,
+                    Email = formEmail
+                };
+                await NhanVienService.UpdateNhanVienAsync(editingNVId.Value, updateDto);
+                successMessage = $"Đã cập nhật nhân viên {formTenNV} thành công!";
+            }
+            else
+            {
+                // Create
+                var createDto = new CreateNhanVienDto
+                {
+                    TenNV = formTenNV,
+                    CaLam = formCaLam,
+                    SoDienThoai = formSoDienThoai,
+                    Email = formEmail
+                };
+                await NhanVienService.CreateNhanVienAsync(createDto);
+                successMessage = $"Đã thêm nhân viên {formTenNV} thành công!";
+            }
+
+            CloseModal();
+            await LoadNhanViens();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi lưu nhân viên: {ex.Message}";
+        }
+    }
+
+    private async Task DeleteNhanVien(int maNV)
+    {
+        try
+        {
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Bạn có chắc chắn muốn xóa nhân viên này?");
+            if (confirmed)
+            {
+                await NhanVienService.DeleteNhanVienAsync(maNV);
+                successMessage = "Xóa nhân viên thành công!";
+                await LoadNhanViens();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi xóa nhân viên: {ex.Message}";
+        }
+    }
+}
+

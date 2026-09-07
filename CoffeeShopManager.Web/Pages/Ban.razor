@@ -1,0 +1,232 @@
+@page "/ban"
+@inject IBanService BanService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Quản lý bàn</PageTitle>
+
+<h2>🪑 Quản lý bàn</h2>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <strong>❌ Lỗi!</strong> @errorMessage
+        <button type="button" class="btn-close" @onclick="@(() => errorMessage = string.Empty)"></button>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(successMessage))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <strong>✅ Thành công!</strong> @successMessage
+        <button type="button" class="btn-close" @onclick="@(() => successMessage = string.Empty)"></button>
+    </div>
+}
+
+<button class="btn btn-primary mb-3" @onclick="ShowAddModal">
+    + Thêm bàn mới
+</button>
+
+@if (bans == null)
+{
+    <p><em>Đang tải...</em></p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Mã bàn</th>
+                    <th>Tên bàn</th>
+                    <th>Trạng thái</th>
+                    <th>Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var ban in bans)
+                {
+                    <tr>
+                        <td><strong>#@ban.MaBan</strong></td>
+                        <td>@ban.TenBan</td>
+                        <td>
+                            <span class="badge @GetStatusClass(ban.TrangThai)">@ban.TrangThai</span>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-warning" @onclick="() => ShowEditModal(ban)">Sửa</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => DeleteBan(ban.MaBan)">Xóa</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<!-- Modal Thêm/Sửa Bàn -->
+@if (showModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-coffee text-white">
+                    <h5 class="modal-title">@(isEditMode ? "Sửa bàn" : "Thêm bàn mới")</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Tên bàn <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" @bind="formTenBan" placeholder="Ví dụ: Bàn 7" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Trạng thái <span class="text-danger">*</span></label>
+                        <select class="form-select" @bind="formTrangThai">
+                            <option value="Trống">Trống</option>
+                            <option value="Đang sử dụng">Đang sử dụng</option>
+                            <option value="Đã đặt">Đã đặt</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Hủy</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveBan">
+                        @(isEditMode ? "Lưu" : "Thêm")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<BanDto>? bans;
+    private string errorMessage = string.Empty;
+    private string successMessage = string.Empty;
+    
+    // Modal states
+    private bool showModal = false;
+    private bool isEditMode = false;
+    private int? editingBanId = null;
+    private string formTenBan = string.Empty;
+    private string formTrangThai = "Trống";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBans();
+    }
+
+    private async Task LoadBans()
+    {
+        try
+        {
+            var result = await BanService.GetAllBansAsync();
+            bans = result.ToList();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi tải danh sách bàn: {ex.Message}";
+        }
+    }
+
+    private string GetStatusClass(string trangThai)
+    {
+        return trangThai switch
+        {
+            "Trống" => "bg-success",
+            "Đang sử dụng" => "bg-warning",
+            "Đã đặt" => "bg-info",
+            _ => "bg-secondary"
+        };
+    }
+
+    private void ShowAddModal()
+    {
+        isEditMode = false;
+        editingBanId = null;
+        formTenBan = string.Empty;
+        formTrangThai = "Trống";
+        showModal = true;
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+    }
+
+    private void ShowEditModal(BanDto ban)
+    {
+        isEditMode = true;
+        editingBanId = ban.MaBan;
+        formTenBan = ban.TenBan;
+        formTrangThai = ban.TrangThai;
+        showModal = true;
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        isEditMode = false;
+        editingBanId = null;
+        formTenBan = string.Empty;
+        formTrangThai = "Trống";
+    }
+
+    private async Task SaveBan()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(formTenBan))
+            {
+                errorMessage = "Tên bàn không được để trống!";
+                return;
+            }
+
+            if (isEditMode && editingBanId.HasValue)
+            {
+                // Update
+                var updateDto = new UpdateBanDto
+                {
+                    TenBan = formTenBan,
+                    TrangThai = formTrangThai
+                };
+                await BanService.UpdateBanAsync(editingBanId.Value, updateDto);
+                successMessage = $"Đã cập nhật bàn {formTenBan} thành công!";
+            }
+            else
+            {
+                // Create
+                var createDto = new CreateBanDto
+                {
+                    TenBan = formTenBan,
+                    TrangThai = formTrangThai
+                };
+                await BanService.CreateBanAsync(createDto);
+                successMessage = $"Đã thêm bàn {formTenBan} thành công!";
+            }
+
+            CloseModal();
+            await LoadBans();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi lưu bàn: {ex.Message}";
+        }
+    }
+
+    private async Task DeleteBan(int maBan)
+    {
+        try
+        {
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Bạn có chắc chắn muốn xóa bàn này?");
+            if (confirmed)
+            {
+                await BanService.DeleteBanAsync(maBan);
+                successMessage = "Xóa bàn thành công!";
+                await LoadBans();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi xóa bàn: {ex.Message}";
+        }
+    }
+}
+
