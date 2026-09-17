@@ -1,0 +1,516 @@
+@page "/ban"
+@attribute [Authorize(Roles = "Admin,Manager,Staff")]
+@inject IBanService BanService
+@inject IDatBanService DatBanService
+@inject IKhachHangService KhachHangService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Quản lý bàn</PageTitle>
+
+<h2>🪑 Quản lý bàn</h2>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <strong>❌ Lỗi!</strong> @errorMessage
+        <button type="button" class="btn-close" @onclick="@(() => errorMessage = string.Empty)"></button>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(successMessage))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <strong>✅ Thành công!</strong> @successMessage
+        <button type="button" class="btn-close" @onclick="@(() => successMessage = string.Empty)"></button>
+    </div>
+}
+
+@if (canManage)
+{
+    <button class="btn btn-primary mb-3" @onclick="ShowAddModal">
+        + Thêm bàn mới
+    </button>
+}
+<button class="btn btn-success mb-3 ms-2" @onclick="ShowBookingModal">
+    + Lịch đặt bàn
+</button>
+<button class="btn btn-outline-primary mb-3 ms-2" @onclick="ShowBookingHistory">
+    Xem lịch đặt bàn
+</button>
+
+@if (bans == null)
+{
+    <p><em>Đang tải...</em></p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Mã bàn</th>
+                    <th>Tên bàn</th>
+                    <th>Trạng thái</th>
+                    <th>Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var ban in bans)
+                {
+                    <tr>
+                        <td><strong>#@ban.MaBan</strong></td>
+                        <td>@ban.TenBan</td>
+                        <td>
+                            <span class="badge @GetStatusClass(ban.TrangThai)">@ban.TrangThai</span>
+                        </td>
+                        <td>
+                            @if (canManage)
+                            {
+                                <button class="btn btn-sm btn-warning" @onclick="() => ShowEditModal(ban)">Sửa</button>
+                                <button class="btn btn-sm btn-danger" @onclick="() => DeleteBan(ban.MaBan)">Xóa</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (showBookingModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5); z-index: 1060;">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-coffee text-white">
+                    <h5 class="modal-title">@(editingBookingId.HasValue ? "Sửa đặt bàn" : "Đặt bàn mới")</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseBookingModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Khách hàng <span class="text-danger">*</span></label>
+                            <select class="form-select" @bind="bookingCustomerId">
+                                <option value="0">-- Chọn khách hàng --</option>
+                                @foreach (var customer in customers)
+                                {
+                                    <option value="@customer.MaKH">@customer.TenKH - @customer.SoDienThoai</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Bàn <span class="text-danger">*</span></label>
+                            <select class="form-select" @bind="bookingBanId">
+                                <option value="0">-- Chọn bàn --</option>
+                                @foreach (var ban in (bans ?? new List<BanDto>()).Where(b => b.TenBan != "Mang về"))
+                                {
+                                    <option value="@ban.MaBan">@ban.TenBan (@ban.TrangThai)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Thời gian bắt đầu <span class="text-danger">*</span></label>
+                            <input type="datetime-local" class="form-control" value="@bookingStart.ToString("yyyy-MM-ddTHH:mm")" @onchange="OnBookingStartChanged" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Thời gian kết thúc <span class="text-danger">*</span></label>
+                            <input type="datetime-local" class="form-control" value="@bookingEnd.ToString("yyyy-MM-ddTHH:mm")" @onchange="OnBookingEndChanged" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Số lượng khách <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" min="1" @bind="bookingGuests" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Ghi chú</label>
+                            <textarea class="form-control" rows="2" @bind="bookingNote" placeholder="Yêu cầu của khách hàng (nếu có)"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseBookingModal">Hủy</button>
+                    <button type="button" class="btn btn-success" @onclick="SaveBookingAsync">Lưu đặt bàn</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showBookingHistory)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5); z-index: 1050;">
+        <div class="modal-dialog modal-dialog-centered modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-coffee text-white">
+                    <h5 class="modal-title">Lịch đặt bàn</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseBookingHistory"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-7">
+                            <input class="form-control" @bind="bookingSearch" @bind:event="oninput" placeholder="Tìm khách hàng, số điện thoại hoặc tên bàn" />
+                        </div>
+                        <div class="col-md-5">
+                            <select class="form-select" @bind="bookingStatusFilter">
+                                <option value="">Tất cả trạng thái</option>
+                                <option>Chờ xác nhận</option>
+                                <option>Đã xác nhận</option>
+                                <option>Đã nhận bàn</option>
+                                <option>Đã hủy</option>
+                                <option>Đã hoàn thành</option>
+                            </select>
+                        </div>
+                    </div>
+                    @if (bookings == null)
+                    {
+                        <p><em>Đang tải...</em></p>
+                    }
+                    else if (!FilteredBookings.Any())
+                    {
+                        <div class="alert alert-info">Chưa có lịch đặt bàn phù hợp.</div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead>
+                                    <tr><th>Khách hàng</th><th>Bàn</th><th>Thời gian</th><th>SL khách</th><th>Trạng thái</th><th>Thao tác</th></tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var booking in FilteredBookings)
+                                    {
+                                        <tr>
+                                            <td><strong>@booking.TenKhachHang</strong><br /><small>@booking.SoDienThoai</small></td>
+                                            <td>@booking.TenBan</td>
+                                            <td>@booking.ThoiGianBatDau.ToString("dd/MM/yyyy HH:mm") - @booking.ThoiGianKetThuc.ToString("HH:mm")</td>
+                                            <td>@booking.SoLuongKhach</td>
+                                            <td><span class="badge @GetBookingStatusClass(booking.TrangThai)">@booking.TrangThai</span></td>
+                                            <td>
+                                                @if (canManage && booking.TrangThai == global::CoffeeShopManager.BLL.Services.DatBanService.ChoXacNhan)
+                                                {
+                                                    <button class="btn btn-sm btn-success me-1" @onclick="() => UpdateBookingStatusAsync(booking.MaDatBan, global::CoffeeShopManager.BLL.Services.DatBanService.DaXacNhan)">Xác nhận</button>
+                                                    <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => EditBooking(booking)">Sửa</button>
+                                                }
+                                                @if (booking.TrangThai == global::CoffeeShopManager.BLL.Services.DatBanService.DaXacNhan)
+                                                {
+                                                    <button class="btn btn-sm btn-primary me-1" @onclick="() => UpdateBookingStatusAsync(booking.MaDatBan, global::CoffeeShopManager.BLL.Services.DatBanService.DaNhanBan)">Nhận bàn</button>
+                                                }
+                                                @if (canManage && booking.TrangThai is not (global::CoffeeShopManager.BLL.Services.DatBanService.DaHuy or global::CoffeeShopManager.BLL.Services.DatBanService.DaHoanThanh))
+                                                {
+                                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => CancelBookingAsync(booking.MaDatBan)">Hủy</button>
+                                                }
+                                                @if (booking.TrangThai == global::CoffeeShopManager.BLL.Services.DatBanService.DaNhanBan)
+                                                {
+                                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => UpdateBookingStatusAsync(booking.MaDatBan, global::CoffeeShopManager.BLL.Services.DatBanService.DaHoanThanh)">Hoàn thành</button>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer"><button class="btn btn-secondary" @onclick="CloseBookingHistory">Đóng</button></div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal Thêm/Sửa Bàn -->
+@if (showModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-coffee text-white">
+                    <h5 class="modal-title">@(isEditMode ? "Sửa bàn" : "Thêm bàn mới")</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Tên bàn <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" @bind="formTenBan" placeholder="Ví dụ: Bàn 7" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Trạng thái <span class="text-danger">*</span></label>
+                        <select class="form-select" @bind="formTrangThai">
+                            <option value="Trống">Trống</option>
+                            <option value="Đang sử dụng">Đang sử dụng</option>
+                            <option value="Đã đặt">Đã đặt</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Hủy</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveBan">
+                        @(isEditMode ? "Lưu" : "Thêm")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<BanDto>? bans;
+    private string errorMessage = string.Empty;
+    private string successMessage = string.Empty;
+    
+    // Modal states
+    private bool showModal = false;
+    private bool isEditMode = false;
+    private int? editingBanId = null;
+    private string formTenBan = string.Empty;
+    private string formTrangThai = "Trống";
+    private bool canManage;
+    private List<KhachHangDto> customers = new();
+    private List<DatBanDto>? bookings;
+    private bool showBookingModal;
+    private bool showBookingHistory;
+    private int? editingBookingId;
+    private int bookingBanId;
+    private int bookingCustomerId;
+    private int bookingGuests = 1;
+    private DateTime bookingStart = DateTime.Now.AddHours(1);
+    private DateTime bookingEnd = DateTime.Now.AddHours(3);
+    private string bookingNote = string.Empty;
+    private string bookingSearch = string.Empty;
+    private string bookingStatusFilter = string.Empty;
+
+    private IEnumerable<DatBanDto> FilteredBookings => (bookings ?? new List<DatBanDto>()).Where(b =>
+        (string.IsNullOrWhiteSpace(bookingSearch)
+            || b.TenKhachHang.Contains(bookingSearch, StringComparison.OrdinalIgnoreCase)
+            || (b.SoDienThoai?.Contains(bookingSearch, StringComparison.OrdinalIgnoreCase) ?? false)
+            || b.TenBan.Contains(bookingSearch, StringComparison.OrdinalIgnoreCase))
+        && (string.IsNullOrWhiteSpace(bookingStatusFilter) || b.TrangThai == bookingStatusFilter));
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        canManage = state.User.IsInRole("Admin") || state.User.IsInRole("Manager");
+        await LoadBans();
+        customers = (await KhachHangService.GetAllKhachHangsAsync()).ToList();
+    }
+
+    private async Task LoadBans()
+    {
+        try
+        {
+            var result = await BanService.GetAllBansAsync();
+            bans = result.ToList();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi tải danh sách bàn: {ex.Message}";
+        }
+    }
+
+    private string GetStatusClass(string trangThai)
+    {
+        return trangThai switch
+        {
+            "Trống" => "bg-success",
+            "Đang sử dụng" => "bg-warning",
+            "Đã đặt" => "bg-info",
+            _ => "bg-secondary"
+        };
+    }
+
+    private void ShowAddModal()
+    {
+        isEditMode = false;
+        editingBanId = null;
+        formTenBan = string.Empty;
+        formTrangThai = "Trống";
+        showModal = true;
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+    }
+
+    private void ShowEditModal(BanDto ban)
+    {
+        isEditMode = true;
+        editingBanId = ban.MaBan;
+        formTenBan = ban.TenBan;
+        formTrangThai = ban.TrangThai;
+        showModal = true;
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        isEditMode = false;
+        editingBanId = null;
+        formTenBan = string.Empty;
+        formTrangThai = "Trống";
+    }
+
+    private async Task SaveBan()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(formTenBan))
+            {
+                errorMessage = "Tên bàn không được để trống!";
+                return;
+            }
+
+            if (isEditMode && editingBanId.HasValue)
+            {
+                // Update
+                var updateDto = new UpdateBanDto
+                {
+                    TenBan = formTenBan,
+                    TrangThai = formTrangThai
+                };
+                await BanService.UpdateBanAsync(editingBanId.Value, updateDto);
+                successMessage = $"Đã cập nhật bàn {formTenBan} thành công!";
+            }
+            else
+            {
+                // Create
+                var createDto = new CreateBanDto
+                {
+                    TenBan = formTenBan,
+                    TrangThai = formTrangThai
+                };
+                await BanService.CreateBanAsync(createDto);
+                successMessage = $"Đã thêm bàn {formTenBan} thành công!";
+            }
+
+            CloseModal();
+            await LoadBans();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi lưu bàn: {ex.Message}";
+        }
+    }
+
+    private async Task DeleteBan(int maBan)
+    {
+        try
+        {
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Bạn có chắc chắn muốn xóa bàn này?");
+            if (confirmed)
+            {
+                await BanService.DeleteBanAsync(maBan);
+                successMessage = "Xóa bàn thành công!";
+                await LoadBans();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi xóa bàn: {ex.Message}";
+        }
+    }
+
+    private async Task ShowBookingModal()
+    {
+        customers = (await KhachHangService.GetAllKhachHangsAsync()).ToList();
+        editingBookingId = null;
+        bookingBanId = 0;
+        bookingCustomerId = 0;
+        bookingGuests = 1;
+        bookingStart = DateTime.Now.AddHours(1);
+        bookingEnd = DateTime.Now.AddHours(3);
+        bookingNote = string.Empty;
+        showBookingModal = true;
+        errorMessage = string.Empty;
+    }
+
+    private async Task ShowBookingHistory()
+    {
+        bookings = (await DatBanService.GetAllAsync()).ToList();
+        bookingSearch = string.Empty;
+        bookingStatusFilter = string.Empty;
+        showBookingHistory = true;
+    }
+
+    private void CloseBookingModal() => showBookingModal = false;
+    private void CloseBookingHistory() => showBookingHistory = false;
+
+    private void EditBooking(DatBanDto booking)
+    {
+        editingBookingId = booking.MaDatBan;
+        bookingBanId = booking.MaBan;
+        bookingCustomerId = booking.MaKH;
+        bookingGuests = booking.SoLuongKhach;
+        bookingStart = booking.ThoiGianBatDau;
+        bookingEnd = booking.ThoiGianKetThuc;
+        bookingNote = booking.GhiChu ?? string.Empty;
+        showBookingHistory = false;
+        showBookingModal = true;
+    }
+
+    private void OnBookingStartChanged(ChangeEventArgs args)
+    {
+        if (DateTime.TryParse(args.Value?.ToString(), out var value)) bookingStart = value;
+    }
+
+    private void OnBookingEndChanged(ChangeEventArgs args)
+    {
+        if (DateTime.TryParse(args.Value?.ToString(), out var value)) bookingEnd = value;
+    }
+
+    private async Task SaveBookingAsync()
+    {
+        try
+        {
+            if (editingBookingId.HasValue)
+            {
+                await DatBanService.UpdateAsync(editingBookingId.Value, new UpdateDatBanDto
+                {
+                    MaBan = bookingBanId, MaKH = bookingCustomerId, ThoiGianBatDau = bookingStart,
+                    ThoiGianKetThuc = bookingEnd, SoLuongKhach = bookingGuests, GhiChu = bookingNote
+                });
+                successMessage = "Cập nhật đặt bàn thành công.";
+            }
+            else
+            {
+                var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+                await DatBanService.CreateAsync(new CreateDatBanDto
+                {
+                    MaBan = bookingBanId, MaKH = bookingCustomerId, ThoiGianBatDau = bookingStart,
+                    ThoiGianKetThuc = bookingEnd, SoLuongKhach = bookingGuests, GhiChu = bookingNote,
+                    NguoiTao = state.User.Identity?.Name
+                });
+                successMessage = "Tạo đặt bàn thành công. Vui lòng xác nhận lịch đặt bàn.";
+            }
+            CloseBookingModal();
+            await LoadBans();
+            if (showBookingHistory) bookings = (await DatBanService.GetAllAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi lưu đặt bàn: {ex.Message}";
+        }
+    }
+
+    private async Task UpdateBookingStatusAsync(int id, string status)
+    {
+        try
+        {
+            await DatBanService.UpdateStatusAsync(id, status);
+            successMessage = $"Đã cập nhật đặt bàn thành {status}.";
+            bookings = (await DatBanService.GetAllAsync()).ToList();
+            await LoadBans();
+        }
+        catch (Exception ex) { errorMessage = $"Lỗi cập nhật đặt bàn: {ex.Message}"; }
+    }
+
+    private Task CancelBookingAsync(int id) => UpdateBookingStatusAsync(id, global::CoffeeShopManager.BLL.Services.DatBanService.DaHuy);
+
+    private static string GetBookingStatusClass(string status) => status switch
+    {
+        global::CoffeeShopManager.BLL.Services.DatBanService.ChoXacNhan => "bg-warning text-dark",
+        global::CoffeeShopManager.BLL.Services.DatBanService.DaXacNhan => "bg-info text-dark",
+        global::CoffeeShopManager.BLL.Services.DatBanService.DaNhanBan => "bg-primary",
+        global::CoffeeShopManager.BLL.Services.DatBanService.DaHuy => "bg-danger",
+        global::CoffeeShopManager.BLL.Services.DatBanService.DaHoanThanh => "bg-success",
+        _ => "bg-secondary"
+    };
+}

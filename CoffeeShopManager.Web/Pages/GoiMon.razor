@@ -1,0 +1,832 @@
+@page "/goimon"
+@attribute [Authorize(Roles = "Admin,Manager,Staff")]
+@inject IBanService BanService
+@inject IMonService MonService
+@inject IHoaDonService HoaDonService
+@inject IKhachHangService KhachHangService
+@inject IKhuyenMaiService KhuyenMaiService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Gọi món</PageTitle>
+
+<h2>📋 Gọi món</h2>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <strong>❌ Lỗi!</strong> @errorMessage
+        <button type="button" class="btn-close" @onclick="@(() => errorMessage = string.Empty)"></button>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(successMessage))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <strong>✅ Thành công!</strong> @successMessage
+        <button type="button" class="btn-close" @onclick="@(() => successMessage = string.Empty)"></button>
+    </div>
+}
+
+<h4>🪑 Chọn bàn</h4>
+@if (bans == null)
+{
+    <p><em>Đang tải...</em></p>
+}
+else
+{
+    <div class="row g-3">
+        @* Card Mua mang về - Hiển thị đầu tiên *@
+        <div class="col-3">
+            <div class="card ban-card" style="cursor: pointer;" 
+                 @onclick="async () => await SelectMangVe()">
+                <div class="card-body text-center">
+                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">
+                        🛍️
+                    </div>
+                    <h5 class="mb-2">Mua mang về</h5>
+                    <span class="badge bg-info">
+                        Take away
+                    </span>
+                </div>
+            </div>
+        </div>
+        @foreach (var ban in bans.Where(b => b.TenBan != "Mang về"))
+        {
+            var canSelect = ban.TrangThai == "Trống" || ban.TrangThai == "Đã đặt" || ban.TrangThai == "Đang sử dụng";
+            <div class="col-3">
+                <div class="card ban-card @(!canSelect ? "disabled" : "")" 
+                     @onclick="async () => { if(canSelect) await SelectBan(ban); }">
+                    <div class="card-body text-center">
+                        <div style="font-size: 2rem; margin-bottom: 0.5rem;">
+                            @(canSelect ? "🪑" : "🔒")
+                        </div>
+                        <h5 class="mb-2">@ban.TenBan</h5>
+                        <span class="badge @GetStatusClass(ban.TrangThai)">
+                            @ban.TrangThai
+                        </span>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@* Modal hiển thị thông tin bàn *@
+@if (selectedBan != null || isMangVe)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-coffee text-white">
+                    <h5 class="modal-title">@(isMangVe ? "🛍️ Khách mua mang về" : $"Bàn: {selectedBan?.TenBan}")</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseBanModal"></button>
+                </div>
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    @if (currentHoaDon == null)
+                    {
+                        @* Chưa có hóa đơn *@
+                        <div class="text-center">
+                            <p>@(isMangVe ? "Chưa có hóa đơn mua mang về" : "Bàn này chưa có hóa đơn")</p>
+                        </div>
+                    }
+                    else
+                    {
+                        @* Đã có hóa đơn - Hiển thị form gọi món *@
+                        <div class="mb-3">
+                            <p><strong>Hóa đơn #@currentHoaDon.MaHD</strong></p>
+                            <p><strong>Thời gian:</strong> @currentHoaDon.ThoiGianTao.ToString("HH:mm dd/MM/yyyy")</p>
+                            <h5 class="text-success">Tổng tiền: @currentHoaDon.TongTien.ToString("N0") ₫</h5>
+                        </div>
+
+                        <h5>Thêm món</h5>
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-6">
+                                <select class="form-select" @bind="selectedMonId">
+                                    <option value="0">-- Chọn món --</option>
+                                    @if (mons != null)
+                                    {
+                                        @foreach (var mon in mons)
+                                        {
+                                            <option value="@mon.MaMon">@mon.TenMon - @mon.DonGia.ToString("N0") ₫</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <input type="number" class="form-control" @bind="soLuong" min="1" placeholder="SL" />
+                            </div>
+                            <div class="col-md-3">
+                                <button class="btn btn-success w-100" @onclick="ThemMon">Thêm</button>
+                            </div>
+                        </div>
+
+                        @if (currentHoaDon.ChiTiets.Any())
+                        {
+                            <h5>Chi tiết món</h5>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Món</th>
+                                            <th>SL</th>
+                                            <th>Thành tiền</th>
+                                            <th>Thao tác</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var ct in currentHoaDon.ChiTiets)
+                                        {
+                                            <tr>
+                                                <td>@ct.TenMon</td>
+                                                <td>@ct.SoLuong</td>
+                                                <td class="text-success"><strong>@ct.ThanhTien.ToString("N0") ₫</strong></td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-danger" @onclick="async () => await XoaMon(ct.MaChiTiet)">
+                                                        Xóa
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer" style="justify-content: center;">
+                    @if (currentHoaDon == null)
+                    {
+                        <button type="button" class="btn btn-secondary" @onclick="CloseBanModal">Đóng</button>
+                        <button type="button" class="btn btn-success" @onclick="TaoHoaDon">
+                            Tạo hóa đơn mới
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-secondary" @onclick="CloseBanModal">Đóng</button>
+                        <button type="button" class="btn btn-primary" @onclick="ShowPaymentMethodModal" disabled="@(currentHoaDon.ChiTiets == null || !currentHoaDon.ChiTiets.Any())">
+                            💳 Thanh toán
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* Modal chọn phương thức thanh toán *@
+@if (showPaymentModal && currentHoaDon != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5); z-index: 1060;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-coffee text-white">
+                    <h5 class="modal-title">💳 Chọn phương thức thanh toán</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="ClosePaymentModal"></button>
+                </div>
+                <div class="modal-body text-center">
+                    @{
+                        var tongTienBanDau = currentHoaDon.TongTien;
+                        var tienGiamKhuyenMai = promotionPreview?.SoTienGiam ?? 0m;
+                        var tongTienSauKhuyenMai = Math.Max(0, tongTienBanDau - tienGiamKhuyenMai);
+                        var tienGiamTuDiem = (diemSuDung / 100m) * 10000m;
+                        if (tienGiamTuDiem > tongTienSauKhuyenMai) tienGiamTuDiem = tongTienSauKhuyenMai;
+                        var tongTienCuoi = tongTienSauKhuyenMai - tienGiamTuDiem;
+                        if (tongTienCuoi < 0) tongTienCuoi = 0;
+                    }
+                    <h5 class="mb-2">Tổng tiền: <span class="text-success">@tongTienBanDau.ToString("N0") ₫</span></h5>
+                    @if (promotionPreview != null)
+                    {
+                        <p class="mb-2 text-success">🎁 Giảm khuyến mãi: <strong>-@tienGiamKhuyenMai.ToString("N0") ₫</strong></p>
+                        <h5 class="mb-2">Sau khuyến mãi: <span class="text-success">@tongTienSauKhuyenMai.ToString("N0") ₫</span></h5>
+                    }
+                    @if (diemSuDung > 0)
+                    {
+                        <p class="mb-2 text-info">💰 Giảm từ điểm: <strong>-@tienGiamTuDiem.ToString("N0") ₫</strong> (@diemSuDung điểm)</p>
+                        <h5 class="mb-4">Thành tiền: <span class="text-success">@tongTienCuoi.ToString("N0") ₫</span></h5>
+                    }
+                    else
+                    {
+                        <div class="mb-4"></div>
+                    }
+                    
+                    @* Thông tin khách hàng *@
+                    <div class="mb-4" style="text-align: left;">
+                        <h6 class="mb-3">📝 Thông tin khách hàng (tùy chọn)</h6>
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-6">
+                                <label class="form-label">Số điện thoại:</label>
+                                <input type="text" class="form-control" value="@customerPhone" 
+                                       placeholder="Nhập số điện thoại để tích điểm" 
+                                       @oninput="async (ChangeEventArgs e) => { customerPhone = e.Value?.ToString() ?? string.Empty; diemSuDung = 0; await CheckCustomerByPhone(); }" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Tên khách hàng:</label>
+                                <input type="text" class="form-control" @bind="customerName" 
+                                       placeholder="Nhập tên để xuất hóa đơn" />
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(customerInfoMessage))
+                        {
+                            <div class="alert alert-info alert-sm mb-2" style="font-size: 0.85rem; padding: 0.5rem;">
+                                @customerInfoMessage
+                            </div>
+                        }
+                    </div>
+
+                    @if (activePromotions.Any())
+                    {
+                        <div class="mb-4" style="text-align: left;">
+                            <label class="form-label">🎁 Khuyến mãi</label>
+                            <select class="form-select" value="@(selectedPromotionId?.ToString() ?? string.Empty)" @onchange="OnPromotionChanged">
+                                <option value="">-- Không áp dụng khuyến mãi --</option>
+                                @foreach (var promotion in activePromotions)
+                                {
+                                    <option value="@promotion.MaKM">@promotion.TenKhuyenMai (@promotion.LoaiKhuyenMai)</option>
+                                }
+                            </select>
+                            @if (promotionPreview != null)
+                            {
+                                <div class="alert alert-success mt-2 mb-0">
+                                    Giảm @promotionPreview.SoTienGiam.ToString("N0") ₫. Thành tiền sau giảm: @promotionPreview.TongTienSauGiam.ToString("N0") ₫.
+                                </div>
+                            }
+                        </div>
+                    }
+                    
+                    <div class="row g-3 mb-3">
+                        <div class="col-4">
+                            <div class="card payment-method-card @(selectedPaymentMethod == "Tiền mặt" ? "selected" : "")" 
+                                 style="cursor: pointer; border: 2px solid @(selectedPaymentMethod == "Tiền mặt" ? "var(--coffee-primary)" : "#dee2e6");"
+                                 @onclick='() => { selectedPaymentMethod = "Tiền mặt"; diemSuDung = 0; }'>
+                                <div class="card-body">
+                                    <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">💵</div>
+                                    <h6>Tiền mặt</h6>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="card payment-method-card @(selectedPaymentMethod == "Qua ngân hàng" ? "selected" : "")" 
+                                 style="cursor: pointer; border: 2px solid @(selectedPaymentMethod == "Qua ngân hàng" ? "var(--coffee-primary)" : "#dee2e6");"
+                                 @onclick='() => { selectedPaymentMethod = "Qua ngân hàng"; diemSuDung = 0; }'>
+                                <div class="card-body">
+                                    <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">🏦</div>
+                                    <h6>Qua ngân hàng</h6>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="card payment-method-card @(selectedPaymentMethod == "Thanh toán bằng điểm" ? "selected" : "") @(customerDiem < 100 ? "disabled" : "")" 
+                                 style="cursor: @(customerDiem < 100 ? "not-allowed" : "pointer"); border: 2px solid @(selectedPaymentMethod == "Thanh toán bằng điểm" ? "var(--coffee-primary)" : "#dee2e6"); opacity: @(customerDiem < 100 ? "0.6" : "1");"
+                                 @onclick='() => { if (customerDiem >= 100) SelectPaymentByPoints(); }'>
+                                <div class="card-body">
+                                    <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">⭐</div>
+                                    <h6>Thanh toán bằng điểm</h6>
+                                    @if (customerDiem < 100)
+                                    {
+                                        <small class="text-muted" style="font-size: 0.75rem;">Cần >= 100 điểm</small>
+                                    }
+                                    else
+                                    {
+                                        <small class="text-muted" style="font-size: 0.75rem;">Có @customerDiem điểm</small>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    @* Hiển thị thông tin điểm khi chọn "Thanh toán bằng điểm" *@
+                    @if (selectedPaymentMethod == "Thanh toán bằng điểm" && customerDiem >= 100)
+                    {
+                        var diemToiDaInfo = (int)Math.Floor((tongTienBanDau / 10000m) * 100m);
+                        var diemSeDungInfo = Math.Min(customerDiem, diemToiDaInfo);
+                        var tienGiamInfo = (diemSeDungInfo / 100m) * 10000m;
+                        if (tienGiamInfo > tongTienBanDau) tienGiamInfo = tongTienBanDau;
+                        var tongTienSauGiamInfo = tongTienBanDau - tienGiamInfo;
+                        if (tongTienSauGiamInfo < 0) tongTienSauGiamInfo = 0;
+                        
+                        <div class="mt-3 p-3" style="background: #e7f3ff; border-radius: 8px; border-left: 4px solid #2196F3;">
+                            <h6 class="mb-2">⭐ Thông tin thanh toán bằng điểm</h6>
+                            <p class="mb-1" style="font-size: 0.9rem;">Số điểm sẽ sử dụng: <strong>@diemSeDungInfo điểm</strong></p>
+                            <p class="mb-1" style="font-size: 0.9rem;">Số tiền được giảm: <strong class="text-success">-@tienGiamInfo.ToString("N0") ₫</strong></p>
+                            @if (tongTienSauGiamInfo > 0)
+                            {
+                                <p class="mb-1 text-warning" style="font-size: 0.9rem;"><strong>Còn thiếu: @tongTienSauGiamInfo.ToString("N0") ₫</strong></p>
+                                <p class="mb-0" style="font-size: 0.85rem; color: #666;">Vui lòng chọn phương thức thanh toán phần còn lại bên dưới</p>
+                            }
+                            else
+                            {
+                                <p class="mb-0 text-success" style="font-size: 0.9rem;"><strong>Đủ điểm để thanh toán hết!</strong></p>
+                            }
+                        </div>
+                    }
+
+                    @if (selectedPaymentMethod == "Qua ngân hàng")
+                    {
+                        <div class="mt-4 p-3" style="background: #f8f9fa; border-radius: 8px;">
+                            <p class="mb-2"><strong>Quét mã QR để thanh toán:</strong></p>
+                            <img src="https://img.vietqr.io/image/vietinbank-101879989921-compact.jpg" 
+                                 alt="QR Code thanh toán" 
+                                 style="max-width: 250px; height: auto; border: 1px solid #dee2e6; border-radius: 8px;" />
+                            <p class="mt-2 text-muted" style="font-size: 0.85rem;">
+                                Ngân hàng: VietinBank<br />
+                                Số tài khoản: 101879989921
+                            </p>
+                        </div>
+                    }
+                    
+                    @* Chọn phương thức thanh toán phần còn lại khi thanh toán bằng điểm nhưng không đủ *@
+                    @if (selectedPaymentMethod == "Thanh toán bằng điểm" && customerDiem >= 100)
+                    {
+                        var diemToiDaRemaining = (int)Math.Floor((tongTienBanDau / 10000m) * 100m);
+                        var diemSeDungRemaining = Math.Min(customerDiem, diemToiDaRemaining);
+                        var tienGiamRemaining = (diemSeDungRemaining / 100m) * 10000m;
+                        if (tienGiamRemaining > tongTienBanDau) tienGiamRemaining = tongTienBanDau;
+                        var tongTienSauGiamRemaining = tongTienBanDau - tienGiamRemaining;
+                        if (tongTienSauGiamRemaining < 0) tongTienSauGiamRemaining = 0;
+                        
+                        @if (tongTienSauGiamRemaining > 0)
+                        {
+                            <div class="mt-3 p-3" style="background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
+                                <h6 class="mb-2">💳 Chọn phương thức thanh toán phần còn lại</h6>
+                                <p class="mb-3" style="font-size: 0.9rem;">Còn thiếu: <strong>@tongTienSauGiamRemaining.ToString("N0") ₫</strong></p>
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <button class="btn w-100 @(selectedPaymentMethodForRemaining == "Tiền mặt" ? "btn-warning" : "btn-outline-warning")" 
+                                                @onclick='() => selectedPaymentMethodForRemaining = "Tiền mặt"'>
+                                            💵 Tiền mặt
+                                        </button>
+                                    </div>
+                                    <div class="col-6">
+                                        <button class="btn w-100 @(selectedPaymentMethodForRemaining == "Qua ngân hàng" ? "btn-warning" : "btn-outline-warning")" 
+                                                @onclick='() => selectedPaymentMethodForRemaining = "Qua ngân hàng"'>
+                                            🏦 Qua ngân hàng
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="modal-footer" style="justify-content: center;">
+                    <button type="button" class="btn btn-secondary" @onclick="ClosePaymentModal">Hủy</button>
+                    <button type="button" class="btn btn-success" @onclick="ConfirmPayment" disabled="@(string.IsNullOrEmpty(selectedPaymentMethod))">
+                        Xác nhận thanh toán
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<BanDto>? bans;
+    private List<MonDto>? mons;
+    private BanDto? selectedBan;
+    private HoaDonDto? currentHoaDon;
+    private int selectedMonId = 0;
+    private int soLuong = 1;
+    private string errorMessage = string.Empty;
+    private string successMessage = string.Empty;
+    private bool isMangVe = false;
+    private bool showPaymentModal = false;
+    private string selectedPaymentMethod = string.Empty;
+    private string customerPhone = string.Empty;
+    private string customerName = string.Empty;
+    private string customerInfoMessage = string.Empty;
+    private int customerDiem = 0; // Số điểm khách hàng hiện có
+    private int diemSuDung = 0; // Số điểm muốn sử dụng
+    private string selectedPaymentMethodForRemaining = string.Empty; // Phương thức thanh toán phần còn lại khi thanh toán bằng điểm
+    private List<KhuyenMaiDto> activePromotions = new();
+    private int? selectedPromotionId;
+    private ApDungKhuyenMaiDto? promotionPreview;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            var bansResult = await BanService.GetAllBansAsync();
+            bans = bansResult.ToList();
+
+            var monsResult = await MonService.GetAllMonsAsync();
+            mons = monsResult.ToList();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi tải dữ liệu: {ex.Message}";
+        }
+    }
+
+    private async Task SelectBan(BanDto ban)
+    {
+        selectedBan = ban;
+        isMangVe = false;
+        currentHoaDon = null;
+
+        // Kiểm tra xem bàn có hóa đơn chưa thanh toán không
+        try
+        {
+            var hoaDons = await HoaDonService.GetHoaDonsByBanAsync(ban.MaBan);
+            var hoaDonChuaThanhToan = hoaDons.FirstOrDefault(h => h.TrangThai == "Chưa thanh toán");
+            if (hoaDonChuaThanhToan != null)
+            {
+                currentHoaDon = hoaDonChuaThanhToan;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi kiểm tra hóa đơn: {ex.Message}";
+        }
+    }
+
+    private async Task SelectMangVe()
+    {
+        try
+        {
+            isMangVe = true;
+            selectedBan = null;
+            currentHoaDon = null;
+            
+            StateHasChanged(); // Đảm bảo UI cập nhật ngay lập tức
+
+            // Tìm bàn "Mang về"
+            var banMangVe = bans?.FirstOrDefault(b => b.TenBan == "Mang về");
+            
+            if (banMangVe != null)
+            {
+                // Kiểm tra xem có hóa đơn chưa thanh toán cho "Mang về" không
+                var hoaDons = await HoaDonService.GetHoaDonsByBanAsync(banMangVe.MaBan);
+                var hoaDonChuaThanhToan = hoaDons.FirstOrDefault(h => h.TrangThai == "Chưa thanh toán");
+                if (hoaDonChuaThanhToan != null)
+                {
+                    currentHoaDon = hoaDonChuaThanhToan;
+                    StateHasChanged();
+                }
+            }
+            // Nếu chưa có bàn "Mang về", sẽ tạo khi tạo hóa đơn
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi chọn mua mang về: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private void CloseBanModal()
+    {
+        selectedBan = null;
+        isMangVe = false;
+        currentHoaDon = null;
+        selectedMonId = 0;
+        soLuong = 1;
+        showPaymentModal = false;
+        selectedPaymentMethod = string.Empty;
+    }
+
+    private async Task ShowPaymentMethodModal()
+    {
+        if (currentHoaDon != null && currentHoaDon.ChiTiets != null && currentHoaDon.ChiTiets.Any())
+        {
+            showPaymentModal = true;
+            selectedPaymentMethod = "Tiền mặt"; // Mặc định
+            selectedPromotionId = null;
+            promotionPreview = null;
+            activePromotions = (await KhuyenMaiService.GetActiveAsync()).ToList();
+        }
+    }
+
+    private void ClosePaymentModal()
+    {
+        showPaymentModal = false;
+        selectedPaymentMethod = string.Empty;
+        customerPhone = string.Empty;
+        customerName = string.Empty;
+        customerInfoMessage = string.Empty;
+        customerDiem = 0;
+        diemSuDung = 0;
+        selectedPaymentMethodForRemaining = string.Empty;
+        activePromotions = new();
+        selectedPromotionId = null;
+        promotionPreview = null;
+    }
+
+    private async Task OnPromotionChanged(ChangeEventArgs args)
+    {
+        selectedPromotionId = int.TryParse(args.Value?.ToString(), out var id) ? id : null;
+        promotionPreview = null;
+
+        if (selectedPromotionId.HasValue && currentHoaDon != null)
+        {
+            try
+            {
+                promotionPreview = await KhuyenMaiService.CalculateDiscountAsync(selectedPromotionId.Value, currentHoaDon.MaHD);
+            }
+            catch (Exception ex)
+            {
+                errorMessage = ex.Message;
+                selectedPromotionId = null;
+            }
+        }
+    }
+
+    private async Task CheckCustomerByPhone()
+    {
+        try
+        {
+            customerInfoMessage = string.Empty;
+            
+            if (string.IsNullOrWhiteSpace(customerPhone))
+            {
+                return;
+            }
+
+            var khachHang = await KhachHangService.GetKhachHangBySoDienThoaiAsync(customerPhone.Trim());
+            
+            if (khachHang != null)
+            {
+                customerName = khachHang.TenKH;
+                customerDiem = khachHang.DiemTichLuy;
+                customerInfoMessage = $"✅ Tìm thấy khách hàng: {khachHang.TenKH} (Điểm tích lũy: {khachHang.DiemTichLuy})";
+            }
+            else
+            {
+                customerDiem = 0;
+                customerInfoMessage = "ℹ️ Khách hàng mới. Tên sẽ được tạo tự động nếu không nhập.";
+            }
+            
+            diemSuDung = 0; // Reset điểm sử dụng khi kiểm tra lại khách hàng
+            selectedPaymentMethodForRemaining = string.Empty; // Reset phương thức thanh toán phần còn lại
+            
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            customerInfoMessage = $"⚠️ Lỗi khi kiểm tra: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+
+    private void SelectPaymentByPoints()
+    {
+        if (customerDiem < 100 || currentHoaDon == null)
+        {
+            errorMessage = customerDiem < 100 
+                ? "Cần ít nhất 100 điểm để sử dụng tính năng thanh toán bằng điểm"
+                : "Vui lòng nhập số điện thoại khách hàng để sử dụng điểm";
+            return;
+        }
+        
+        selectedPaymentMethod = "Thanh toán bằng điểm";
+        
+        // Tự động tính số điểm tối đa có thể dùng
+        var tongTienBanDau = currentHoaDon.TongTien;
+        var diemToiDa = (int)Math.Floor((tongTienBanDau / 10000m) * 100m);
+        diemSuDung = Math.Min(customerDiem, diemToiDa);
+        
+        StateHasChanged();
+    }
+
+    private async Task TaoHoaDon()
+    {
+        try
+        {
+            int maBan;
+            
+            if (isMangVe)
+            {
+                // Tìm hoặc tạo bàn "Mang về"
+                var banMangVe = bans?.FirstOrDefault(b => b.TenBan == "Mang về");
+                if (banMangVe == null)
+                {
+                    var createBanDto = new CreateBanDto
+                    {
+                        TenBan = "Mang về",
+                        TrangThai = "Trống"
+                    };
+                    banMangVe = await BanService.CreateBanAsync(createBanDto);
+                    await LoadData();
+                }
+                maBan = banMangVe.MaBan;
+            }
+            else
+            {
+                if (selectedBan == null) return;
+                maBan = selectedBan.MaBan;
+            }
+
+            var createDto = new CreateHoaDonDto
+            {
+                MaBan = maBan,
+                MaNV = 1 // Default nhân viên
+            };
+
+            currentHoaDon = await HoaDonService.CreateHoaDonAsync(createDto);
+            successMessage = isMangVe ? "Tạo hóa đơn mua mang về thành công!" : "Tạo hóa đơn thành công!";
+            // Không đóng modal, chuyển sang form gọi món
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi tạo hóa đơn: {ex.Message}";
+        }
+    }
+
+    private async Task ThemMon()
+    {
+        try
+        {
+            if (currentHoaDon == null || selectedMonId == 0 || soLuong <= 0)
+            {
+                errorMessage = "Vui lòng chọn món và nhập số lượng hợp lệ";
+                return;
+            }
+
+            var goiMonDto = new GoiMonDto
+            {
+                MaHD = currentHoaDon.MaHD,
+                MaMon = selectedMonId,
+                SoLuong = soLuong
+            };
+
+            currentHoaDon = await HoaDonService.GoiMonAsync(goiMonDto);
+            successMessage = "Thêm món thành công!";
+            selectedMonId = 0;
+            soLuong = 1;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi thêm món: {ex.Message}";
+        }
+    }
+
+    private async Task XoaMon(int maChiTiet)
+    {
+        try
+        {
+            if (currentHoaDon == null) return;
+
+            if (await JSRuntime.InvokeAsync<bool>("confirm", "Bạn có chắc chắn muốn xóa món này không?"))
+            {
+                var result = await HoaDonService.XoaMonAsync(maChiTiet);
+                
+                if (result == null)
+                {
+                    // Hóa đơn đã bị xóa vì không còn món
+                    successMessage = "Đã xóa món. Hóa đơn đã được xóa vì không còn món nào.";
+                    currentHoaDon = null;
+                    await LoadData(); // Reload để cập nhật danh sách bàn
+                }
+                else
+                {
+                    currentHoaDon = result;
+                    successMessage = "Xóa món thành công!";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi xóa món: {ex.Message}";
+        }
+    }
+
+    private async Task ConfirmPayment()
+    {
+        try
+        {
+            if (currentHoaDon == null || string.IsNullOrEmpty(selectedPaymentMethod)) return;
+
+            // Kiểm tra xem có món không
+            if (currentHoaDon.ChiTiets == null || !currentHoaDon.ChiTiets.Any())
+            {
+                // Tự động xóa hóa đơn nếu không có món
+                await HoaDonService.DeleteHoaDonAsync(currentHoaDon.MaHD);
+                successMessage = "Hóa đơn đã được xóa vì không có món nào.";
+                currentHoaDon = null;
+                showPaymentModal = false;
+                await LoadData();
+                return;
+            }
+
+            var tongTienBanDau = currentHoaDon.TongTien;
+            var tienGiamTuDiem = (diemSuDung / 100m) * 10000m;
+            if (tienGiamTuDiem > tongTienBanDau) tienGiamTuDiem = tongTienBanDau;
+            var tongTienCuoi = tongTienBanDau - tienGiamTuDiem;
+            if (tongTienCuoi < 0) tongTienCuoi = 0;
+
+            var confirmMessage = "";
+            if (selectedPaymentMethod == "Thanh toán bằng điểm")
+            {
+                if (customerDiem < 100)
+                {
+                    errorMessage = "Cần ít nhất 100 điểm để sử dụng tính năng thanh toán bằng điểm";
+                    return;
+                }
+                
+                // Tính lại số điểm sẽ dùng
+                var diemToiDa = (int)Math.Floor((tongTienBanDau / 10000m) * 100m);
+                diemSuDung = Math.Min(customerDiem, diemToiDa);
+                tienGiamTuDiem = (diemSuDung / 100m) * 10000m;
+                if (tienGiamTuDiem > tongTienBanDau) tienGiamTuDiem = tongTienBanDau;
+                tongTienCuoi = tongTienBanDau - tienGiamTuDiem;
+                if (tongTienCuoi < 0) tongTienCuoi = 0;
+                
+                if (tongTienCuoi > 0)
+                {
+                    // Không đủ điểm, cần chọn phương thức thanh toán phần còn lại
+                    if (string.IsNullOrEmpty(selectedPaymentMethodForRemaining))
+                    {
+                        errorMessage = $"Không đủ điểm để thanh toán hết. Sẽ giảm {tienGiamTuDiem:N0} ₫ ({diemSuDung} điểm), còn thiếu {tongTienCuoi:N0} ₫. Vui lòng chọn phương thức thanh toán phần còn lại bên dưới.";
+                        return; // Yêu cầu chọn phương thức thanh toán phần còn lại
+                    }
+                    
+                    confirmMessage = $"Xác nhận thanh toán hóa đơn #{currentHoaDon.MaHD}?\nTổng tiền: {tongTienBanDau:N0} ₫\nGiảm từ điểm: -{tienGiamTuDiem:N0} ₫ ({diemSuDung} điểm)\nCòn thiếu: {tongTienCuoi:N0} ₫\nThanh toán phần còn lại bằng: {selectedPaymentMethodForRemaining}";
+                }
+                else
+                {
+                    // Đủ điểm để thanh toán hết
+                    confirmMessage = $"Xác nhận thanh toán hóa đơn #{currentHoaDon.MaHD} bằng điểm?\nTổng tiền: {tongTienBanDau:N0} ₫\nSử dụng điểm: {diemSuDung} điểm (-{tienGiamTuDiem:N0} ₫)\nThành tiền: {tongTienCuoi:N0} ₫";
+                }
+            }
+            else if (diemSuDung > 0)
+            {
+                confirmMessage = selectedPaymentMethod == "Qua ngân hàng" 
+                    ? $"Xác nhận thanh toán hóa đơn #{currentHoaDon.MaHD} qua ngân hàng?\nTổng tiền: {tongTienBanDau:N0} ₫\nGiảm từ điểm: -{tienGiamTuDiem:N0} ₫ ({diemSuDung} điểm)\nThành tiền: {tongTienCuoi:N0} ₫"
+                    : $"Xác nhận thanh toán hóa đơn #{currentHoaDon.MaHD} bằng tiền mặt?\nTổng tiền: {tongTienBanDau:N0} ₫\nGiảm từ điểm: -{tienGiamTuDiem:N0} ₫ ({diemSuDung} điểm)\nThành tiền: {tongTienCuoi:N0} ₫";
+            }
+            else
+            {
+                confirmMessage = selectedPaymentMethod == "Qua ngân hàng" 
+                    ? $"Xác nhận thanh toán hóa đơn #{currentHoaDon.MaHD} qua ngân hàng với tổng tiền {tongTienBanDau:N0} ₫?"
+                    : $"Xác nhận thanh toán hóa đơn #{currentHoaDon.MaHD} bằng tiền mặt với tổng tiền {tongTienBanDau:N0} ₫?";
+            }
+
+            if (await JSRuntime.InvokeAsync<bool>("confirm", confirmMessage))
+            {
+                // Xác định phương thức thanh toán cuối cùng
+                var phuongThucThanhToan = selectedPaymentMethod;
+                if (selectedPaymentMethod == "Thanh toán bằng điểm" && !string.IsNullOrEmpty(selectedPaymentMethodForRemaining))
+                {
+                    // Nếu thanh toán bằng điểm nhưng không đủ, dùng phương thức thanh toán phần còn lại
+                    phuongThucThanhToan = $"{selectedPaymentMethod} + {selectedPaymentMethodForRemaining}";
+                }
+                
+                var thanhToanDto = new ThanhToanDto
+                {
+                    MaHD = currentHoaDon.MaHD,
+                    MaKH = null, // Sẽ được xử lý trong service
+                    PhuongThucThanhToan = phuongThucThanhToan,
+                    SoDienThoai = string.IsNullOrWhiteSpace(customerPhone) ? null : customerPhone.Trim(),
+                    TenKH = string.IsNullOrWhiteSpace(customerName) ? null : customerName.Trim(),
+                    DiemSuDung = diemSuDung,
+                    MaKM = selectedPromotionId
+                };
+
+                await HoaDonService.ThanhToanAsync(thanhToanDto);
+                var paymentMethodDisplay = selectedPaymentMethod == "Thanh toán bằng điểm" 
+                    ? "⭐ Thanh toán bằng điểm" 
+                    : selectedPaymentMethod;
+                var message = diemSuDung > 0 
+                    ? $"Thanh toán thành công bằng {paymentMethodDisplay}! Tổng tiền: {tongTienBanDau:N0} ₫, Giảm: {tienGiamTuDiem:N0} ₫ ({diemSuDung} điểm), Thành tiền: {tongTienCuoi:N0} ₫"
+                    : $"Thanh toán thành công bằng {paymentMethodDisplay}! Tổng tiền: {tongTienBanDau:N0} ₫";
+                successMessage = message;
+                selectedBan = null;
+                isMangVe = false;
+                currentHoaDon = null;
+                showPaymentModal = false;
+                selectedPaymentMethod = string.Empty;
+                customerPhone = string.Empty;
+                customerName = string.Empty;
+                customerInfoMessage = string.Empty;
+                customerDiem = 0;
+                diemSuDung = 0;
+                selectedPaymentMethodForRemaining = string.Empty;
+                activePromotions = new();
+                selectedPromotionId = null;
+                promotionPreview = null;
+                await LoadData();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi thanh toán: {ex.Message}";
+            showPaymentModal = false;
+        }
+    }
+
+    private string GetStatusClass(string trangThai)
+    {
+        return trangThai switch
+        {
+            "Trống" => "bg-success",
+            "Đang sử dụng" => "bg-warning",
+            "Đã đặt" => "bg-info",
+            _ => "bg-secondary"
+        };
+    }
+}

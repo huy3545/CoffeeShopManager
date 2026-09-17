@@ -1,0 +1,240 @@
+@page "/mon"
+@attribute [Authorize(Roles = "Admin,Manager")]
+@inject IMonService MonService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Quản lý món</PageTitle>
+
+<h2>☕ Quản lý món</h2>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <strong>❌ Lỗi!</strong> @errorMessage
+        <button type="button" class="btn-close" @onclick="@(() => errorMessage = string.Empty)"></button>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(successMessage))
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <strong>✅ Thành công!</strong> @successMessage
+        <button type="button" class="btn-close" @onclick="@(() => successMessage = string.Empty)"></button>
+    </div>
+}
+
+<button class="btn btn-primary mb-3" @onclick="ShowAddModal">
+    + Thêm món mới
+</button>
+
+@if (mons == null)
+{
+    <p><em>Đang tải...</em></p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Mã món</th>
+                    <th>Tên món</th>
+                    <th>Đơn giá</th>
+                    <th>Loại</th>
+                    <th>Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var mon in mons)
+                {
+                    <tr>
+                        <td><strong>#@mon.MaMon</strong></td>
+                        <td>@mon.TenMon</td>
+                        <td><strong class="text-success">@mon.DonGia.ToString("N0") ₫</strong></td>
+                        <td><span class="badge bg-info">@mon.Loai</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-warning" @onclick="() => ShowEditModal(mon)">Sửa</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => DeleteMon(mon.MaMon)">Xóa</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<!-- Modal Thêm/Sửa Món -->
+@if (showModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-coffee text-white">
+                    <h5 class="modal-title">@(isEditMode ? "Sửa món" : "Thêm món mới")</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Tên món <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" @bind="formTenMon" placeholder="Ví dụ: Latte" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Đơn giá (VNĐ) <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" @bind="formDonGia" placeholder="Ví dụ: 45000" min="0" step="1000" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Loại <span class="text-danger">*</span></label>
+                        <select class="form-select" @bind="formLoai">
+                            <option value="Cà phê">Cà phê</option>
+                            <option value="Trà">Trà</option>
+                            <option value="Nước ép">Nước ép</option>
+                            <option value="Đồ ăn nhẹ">Đồ ăn nhẹ</option>
+                            <option value="Sinh tố">Sinh tố</option>
+                            <option value="Khác">Khác</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Hủy</button>
+                    <button type="button" class="btn btn-primary" @onclick="SaveMon">
+                        @(isEditMode ? "Lưu" : "Thêm")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<MonDto>? mons;
+    private string errorMessage = string.Empty;
+    private string successMessage = string.Empty;
+    
+    // Modal states
+    private bool showModal = false;
+    private bool isEditMode = false;
+    private int? editingMonId = null;
+    private string formTenMon = string.Empty;
+    private decimal formDonGia = 0;
+    private string formLoai = "Cà phê";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMons();
+    }
+
+    private async Task LoadMons()
+    {
+        try
+        {
+            var result = await MonService.GetAllMonsAsync();
+            mons = result.ToList();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi tải danh sách món: {ex.Message}";
+        }
+    }
+
+    private void ShowAddModal()
+    {
+        isEditMode = false;
+        editingMonId = null;
+        formTenMon = string.Empty;
+        formDonGia = 0;
+        formLoai = "Cà phê";
+        showModal = true;
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+    }
+
+    private void ShowEditModal(MonDto mon)
+    {
+        isEditMode = true;
+        editingMonId = mon.MaMon;
+        formTenMon = mon.TenMon;
+        formDonGia = mon.DonGia;
+        formLoai = mon.Loai;
+        showModal = true;
+        errorMessage = string.Empty;
+        successMessage = string.Empty;
+    }
+
+    private void CloseModal()
+    {
+        showModal = false;
+        isEditMode = false;
+        editingMonId = null;
+        formTenMon = string.Empty;
+        formDonGia = 0;
+        formLoai = "Cà phê";
+    }
+
+    private async Task SaveMon()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(formTenMon))
+            {
+                errorMessage = "Tên món không được để trống!";
+                return;
+            }
+
+            if (formDonGia <= 0)
+            {
+                errorMessage = "Đơn giá phải lớn hơn 0!";
+                return;
+            }
+
+            if (isEditMode && editingMonId.HasValue)
+            {
+                // Update
+                var updateDto = new UpdateMonDto
+                {
+                    TenMon = formTenMon,
+                    DonGia = formDonGia,
+                    Loai = formLoai
+                };
+                await MonService.UpdateMonAsync(editingMonId.Value, updateDto);
+                successMessage = $"Đã cập nhật món {formTenMon} thành công!";
+            }
+            else
+            {
+                // Create
+                var createDto = new CreateMonDto
+                {
+                    TenMon = formTenMon,
+                    DonGia = formDonGia,
+                    Loai = formLoai
+                };
+                await MonService.CreateMonAsync(createDto);
+                successMessage = $"Đã thêm món {formTenMon} thành công!";
+            }
+
+            CloseModal();
+            await LoadMons();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi lưu món: {ex.Message}";
+        }
+    }
+
+    private async Task DeleteMon(int maMon)
+    {
+        try
+        {
+            var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Bạn có chắc chắn muốn xóa món này?");
+            if (confirmed)
+            {
+                await MonService.DeleteMonAsync(maMon);
+                successMessage = "Xóa món thành công!";
+                await LoadMons();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi khi xóa món: {ex.Message}";
+        }
+    }
+}

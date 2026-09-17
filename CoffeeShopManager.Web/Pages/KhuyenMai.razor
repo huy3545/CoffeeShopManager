@@ -1,0 +1,304 @@
+@page "/khuyenmai"
+@attribute [Authorize(Roles = "Admin,Manager,Staff")]
+@using System.ComponentModel.DataAnnotations
+@inject IKhuyenMaiService PromotionService
+@inject IMonService MonService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Quản lý khuyến mãi</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h2>🎁 Quản lý khuyến mãi</h2>
+        <p class="text-muted mb-0">Xem và quản lý các chương trình ưu đãi của quán.</p>
+    </div>
+    @if (canManage)
+    {
+        <button class="btn btn-primary" @onclick="BeginCreate">+ Thêm khuyến mãi</button>
+    }
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="alert @(isError ? "alert-danger" : "alert-success")">@message</div>
+}
+
+<div class="card mb-3">
+    <div class="card-body row g-3">
+        <div class="col-md-6">
+            <label class="form-label">Tìm theo tên</label>
+            <input class="form-control" @bind="searchText" @bind:event="oninput" placeholder="Nhập tên khuyến mãi" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Loại</label>
+            <select class="form-select" @bind="typeFilter">
+                <option value="">Tất cả</option>
+                @foreach (var type in PromotionTypes)
+                {
+                    <option value="@type">@type</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Trạng thái</label>
+            <select class="form-select" @bind="statusFilter">
+                <option value="">Tất cả</option>
+                <option>Đang hoạt động</option>
+                <option>Chưa bắt đầu</option>
+                <option>Đã hết hạn</option>
+                <option>Đã ngừng sử dụng</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Tên khuyến mãi</th>
+                    <th>Loại</th>
+                    <th>Giá trị giảm</th>
+                    <th>Thời gian</th>
+                    <th>Điều kiện</th>
+                    <th>Trạng thái</th>
+                    @if (canManage) { <th class="text-end">Thao tác</th> }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in FilteredPromotions)
+                {
+                    <tr>
+                        <td><strong>@item.TenKhuyenMai</strong><br /><small class="text-muted">@item.MoTa</small></td>
+                        <td>@item.LoaiKhuyenMai</td>
+                        <td>@FormatDiscount(item)</td>
+                        <td>@item.NgayBatDau.ToString("dd/MM/yyyy") - @item.NgayKetThuc.ToString("dd/MM/yyyy")</td>
+                        <td>
+                            @if (item.HoaDonToiThieu > 0) { <div>Từ @item.HoaDonToiThieu.ToString("N0") ₫</div> }
+                            @if (!string.IsNullOrWhiteSpace(item.TenMon)) { <div>Món: @item.TenMon</div> }
+                            @if (!string.IsNullOrWhiteSpace(item.LoaiMon)) { <div>Loại món: @item.LoaiMon</div> }
+                            @if (item.HoaDonToiThieu == 0 && string.IsNullOrWhiteSpace(item.TenMon) && string.IsNullOrWhiteSpace(item.LoaiMon)) { <span>Toàn hóa đơn</span> }
+                        </td>
+                        <td><span class="badge @StatusClass(item.TrangThai)">@item.TrangThai</span></td>
+                        @if (canManage)
+                        {
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => BeginEdit(item)">Sửa</button>
+                                <button class="btn btn-sm btn-outline-warning me-1" @onclick="() => ToggleAsync(item.MaKM)">@(item.DaKichHoat ? "Ngừng" : "Kích hoạt")</button>
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteAsync(item.MaKM)">Xóa</button>
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (showEditor)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal d-block" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(editingId.HasValue ? "Chỉnh sửa khuyến mãi" : "Thêm khuyến mãi")</h5>
+                    <button class="btn-close" @onclick="CloseEditor"></button>
+                </div>
+                <EditForm Model="form" OnValidSubmit="SaveAsync">
+                    <DataAnnotationsValidator />
+                    <div class="modal-body">
+                        @if (!string.IsNullOrWhiteSpace(editorError)) { <div class="alert alert-danger">@editorError</div> }
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Tên khuyến mãi</label>
+                                <InputText class="form-control" @bind-Value="form.TenKhuyenMai" />
+                                <ValidationMessage For="@(() => form.TenKhuyenMai)" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Loại khuyến mãi</label>
+                                <InputSelect class="form-select" @bind-Value="form.LoaiKhuyenMai">
+                                    <option value="">-- Chọn loại --</option>
+                                    @foreach (var type in PromotionTypes) { <option value="@type">@type</option> }
+                                </InputSelect>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Giá trị giảm</label>
+                                <InputNumber class="form-control" @bind-Value="form.GiaTriGiam" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Hóa đơn tối thiểu</label>
+                                <InputNumber class="form-control" @bind-Value="form.HoaDonToiThieu" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Ngày bắt đầu</label>
+                                <InputDate class="form-control" @bind-Value="form.NgayBatDau" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Ngày kết thúc</label>
+                                <InputDate class="form-control" @bind-Value="form.NgayKetThuc" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Món áp dụng</label>
+                                <InputSelect class="form-select" @bind-Value="form.MaMon">
+                                    <option value="">-- Không chọn món --</option>
+                                    @foreach (var mon in mons) { <option value="@mon.MaMon">@mon.TenMon</option> }
+                                </InputSelect>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Loại món áp dụng</label>
+                                <InputText class="form-control" @bind-Value="form.LoaiMon" placeholder="Ví dụ: Cà phê" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Số lần sử dụng tối đa</label>
+                                <InputNumber class="form-control" @bind-Value="form.SoLanSuDungToiDa" />
+                            </div>
+                            <div class="col-md-6 d-flex align-items-end">
+                                <div class="form-check mb-2">
+                                    <InputCheckbox class="form-check-input" @bind-Value="form.DaKichHoat" />
+                                    <label class="form-check-label">Kích hoạt ngay</label>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Mô tả</label>
+                                <InputTextArea class="form-control" @bind-Value="form.MoTa" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseEditor">Hủy</button>
+                        <button type="submit" class="btn btn-primary">Lưu</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private static readonly string[] PromotionTypes =
+        { global::CoffeeShopManager.BLL.Services.KhuyenMaiService.PhanTram, global::CoffeeShopManager.BLL.Services.KhuyenMaiService.SoTien, global::CoffeeShopManager.BLL.Services.KhuyenMaiService.HoaDonToiThieu, global::CoffeeShopManager.BLL.Services.KhuyenMaiService.Mon, global::CoffeeShopManager.BLL.Services.KhuyenMaiService.LoaiMon };
+    private readonly PromotionForm form = new();
+    private List<KhuyenMaiDto> promotions = new();
+    private List<MonDto> mons = new();
+    private string searchText = string.Empty;
+    private string typeFilter = string.Empty;
+    private string statusFilter = string.Empty;
+    private string? message;
+    private string? editorError;
+    private bool isError;
+    private bool canManage;
+    private bool showEditor;
+    private bool isStaff;
+    private int? editingId;
+
+    private IEnumerable<KhuyenMaiDto> FilteredPromotions => promotions.Where(item =>
+        (string.IsNullOrWhiteSpace(searchText) || item.TenKhuyenMai.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+        && (string.IsNullOrWhiteSpace(typeFilter) || item.LoaiKhuyenMai == typeFilter)
+        && (string.IsNullOrWhiteSpace(statusFilter) || item.TrangThai == statusFilter));
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        isStaff = state.User.IsInRole("Staff") && !state.User.IsInRole("Admin") && !state.User.IsInRole("Manager");
+        canManage = state.User.IsInRole("Admin") || state.User.IsInRole("Manager");
+        mons = (await MonService.GetAllMonsAsync()).ToList();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() => promotions = (isStaff
+        ? await PromotionService.GetActiveAsync()
+        : await PromotionService.GetAllAsync()).ToList();
+
+    private void BeginCreate()
+    {
+        editingId = null;
+        form.Reset();
+        showEditor = true;
+        editorError = null;
+    }
+
+    private void BeginEdit(KhuyenMaiDto item)
+    {
+        editingId = item.MaKM;
+        form.TenKhuyenMai = item.TenKhuyenMai;
+        form.MoTa = item.MoTa;
+        form.LoaiKhuyenMai = item.LoaiKhuyenMai;
+        form.GiaTriGiam = item.GiaTriGiam;
+        form.NgayBatDau = item.NgayBatDau;
+        form.NgayKetThuc = item.NgayKetThuc;
+        form.HoaDonToiThieu = item.HoaDonToiThieu;
+        form.MaMon = item.MaMon;
+        form.LoaiMon = item.LoaiMon;
+        form.SoLanSuDungToiDa = item.SoLanSuDungToiDa;
+        form.DaKichHoat = item.DaKichHoat;
+        editorError = null;
+        showEditor = true;
+    }
+
+    private void CloseEditor() => showEditor = false;
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            editorError = null;
+            var dto = new UpdateKhuyenMaiDto
+            {
+                TenKhuyenMai = form.TenKhuyenMai,
+                MoTa = form.MoTa,
+                LoaiKhuyenMai = form.LoaiKhuyenMai,
+                GiaTriGiam = form.GiaTriGiam,
+                NgayBatDau = form.NgayBatDau,
+                NgayKetThuc = form.NgayKetThuc,
+                HoaDonToiThieu = form.HoaDonToiThieu,
+                MaMon = form.LoaiKhuyenMai == global::CoffeeShopManager.BLL.Services.KhuyenMaiService.Mon ? form.MaMon : null,
+                LoaiMon = form.LoaiKhuyenMai == global::CoffeeShopManager.BLL.Services.KhuyenMaiService.LoaiMon ? form.LoaiMon : null,
+                SoLanSuDungToiDa = form.SoLanSuDungToiDa,
+                DaKichHoat = form.DaKichHoat
+            };
+            if (editingId.HasValue) await PromotionService.UpdateAsync(editingId.Value, dto);
+            else await PromotionService.CreateAsync(dto);
+            showEditor = false;
+            message = "Đã lưu khuyến mãi thành công.";
+            isError = false;
+            await LoadAsync();
+        }
+        catch (Exception ex) { editorError = ex.Message; }
+    }
+
+    private async Task ToggleAsync(int id)
+    {
+        try { await PromotionService.ToggleAsync(id); message = "Đã cập nhật trạng thái khuyến mãi."; isError = false; await LoadAsync(); }
+        catch (Exception ex) { ShowError(ex.Message); }
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        try { await PromotionService.DeleteAsync(id); message = "Đã xóa khuyến mãi."; isError = false; await LoadAsync(); }
+        catch (Exception ex) { ShowError(ex.Message); }
+    }
+
+    private void ShowError(string text) { message = text; isError = true; }
+    private static string FormatDiscount(KhuyenMaiDto item) => item.LoaiKhuyenMai == global::CoffeeShopManager.BLL.Services.KhuyenMaiService.PhanTram ? $"{item.GiaTriGiam:N0}%" : $"{item.GiaTriGiam:N0} ₫";
+    private static string StatusClass(string status) => status switch { "Đang hoạt động" => "text-bg-success", "Chưa bắt đầu" => "text-bg-info", "Đã hết hạn" => "text-bg-secondary", _ => "text-bg-warning" };
+
+    private sealed class PromotionForm
+    {
+        [Required(ErrorMessage = "Tên khuyến mãi không được để trống.")]
+        public string TenKhuyenMai { get; set; } = string.Empty;
+        public string? MoTa { get; set; }
+        [Required(ErrorMessage = "Loại khuyến mãi không được để trống.")]
+        public string LoaiKhuyenMai { get; set; } = string.Empty;
+        public decimal GiaTriGiam { get; set; }
+        public DateTime NgayBatDau { get; set; } = DateTime.Today;
+        public DateTime NgayKetThuc { get; set; } = DateTime.Today.AddDays(30);
+        public decimal HoaDonToiThieu { get; set; }
+        public int? MaMon { get; set; }
+        public string? LoaiMon { get; set; }
+        public int? SoLanSuDungToiDa { get; set; }
+        public bool DaKichHoat { get; set; } = true;
+        public void Reset() { TenKhuyenMai = string.Empty; MoTa = null; LoaiKhuyenMai = string.Empty; GiaTriGiam = 0; NgayBatDau = DateTime.Today; NgayKetThuc = DateTime.Today.AddDays(30); HoaDonToiThieu = 0; MaMon = null; LoaiMon = null; SoLanSuDungToiDa = null; DaKichHoat = true; }
+    }
+}

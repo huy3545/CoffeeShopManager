@@ -1,0 +1,30 @@
+STT,Module,Test Case,Input,Action,Expected,Actual,Status
+1,Bàn,TC_BAN_01 - Tạo bàn mới hợp lệ,"TenBan = ""Bàn 10"", TrangThai = ""Trống""",POST /api/ban,Trả về 201 Created với thông tin bàn mới,,Pass
+2,Bàn,TC_BAN_02 - Tạo bàn với tên trống,"TenBan = """", TrangThai = ""Trống""",POST /api/ban,Trả về 400 BadRequest với thông báo lỗi,,Pass
+3,Bàn,TC_BAN_03 - Lấy danh sách tất cả bàn,N/A,GET /api/ban,Trả về 200 OK với danh sách tất cả bàn,,Pass
+4,Bàn,TC_BAN_04 - Cập nhật trạng thái bàn,"MaBan = 1, TrangThai = ""Đang sử dụng""",PUT /api/ban/1,Trả về 200 OK với thông tin bàn đã cập nhật,,Pass
+5,Bàn,TC_BAN_05 - Xóa bàn hợp lệ,MaBan = 5,DELETE /api/ban/5,Trả về 204 NoContent,,Pass
+6,Món,TC_MON_01 - Tạo món mới hợp lệ,"TenMon = ""Latte"", DonGia = 45000, Loai = ""Cà phê""",POST /api/mon,Trả về 201 Created với thông tin món mới,,Pass
+7,Món,TC_MON_02 - Tạo món với giá âm,"TenMon = ""Test"", DonGia = -1000, Loai = ""Test""",POST /api/mon,Trả về 400 BadRequest với thông báo lỗi,,Pass
+8,Món,TC_MON_03 - Lấy thông tin món theo ID,MaMon = 1,GET /api/mon/1,Trả về 200 OK với thông tin món có MaMon = 1,,Pass
+9,Món,TC_MON_04 - Cập nhật giá món,"MaMon = 1, DonGia = 28000",PUT /api/mon/1,Trả về 200 OK với giá món đã cập nhật,,Pass
+10,Món,TC_MON_05 - Xóa món,MaMon = 10,DELETE /api/mon/10,Trả về 204 NoContent,,Pass
+11,Hóa đơn,TC_HD_01 - Tạo hóa đơn cho bàn trống,"MaBan = 1, MaNV = 1",POST /api/hoadon,Trả về 201 Created với hóa đơn mới và bàn chuyển sang ""Đang sử dụng"",,Pass
+12,Hóa đơn,TC_HD_02 - Tạo hóa đơn cho bàn đang sử dụng,MaBan = 2 (đang sử dụng),POST /api/hoadon,Trả về 400 BadRequest với thông báo bàn đang được sử dụng,,Pass
+13,Hóa đơn,TC_HD_03 - Gọi món,"MaHD = 1, MaMon = 1, SoLuong = 2",POST /api/hoadon/goimon,Trả về 200 OK với chi tiết hóa đơn đã thêm món,,Pass
+14,Hóa đơn,TC_HD_04 - Thanh toán hóa đơn,"MaHD = 1, MaKH = 2",POST /api/hoadon/thanhtoan,"Trả về 200 OK, hóa đơn chuyển sang ""Đã thanh toán"", bàn chuyển về ""Trống"",,Pass
+15,Hóa đơn,TC_HD_05 - Lấy hóa đơn theo khoảng thời gian,"TuNgay = ""2024-01-01"", DenNgay = ""2024-12-31""",GET /api/hoadon/daterange,Trả về 200 OK với danh sách hóa đơn trong khoảng thời gian,,Pass
+16,Nhân viên,TC_NV_01 - Tạo nhân viên mới,"TenNV = ""Nguyễn Văn D"", CaLam = ""Sáng""",POST /api/nhanvien,Trả về 201 Created với thông tin nhân viên mới,,Pass
+17,Nhân viên,TC_NV_02 - Lấy nhân viên theo ca làm,CaLam = ""Sáng"",GET /api/nhanvien/calam/Sáng,Trả về 200 OK với danh sách nhân viên ca Sáng,,Pass
+18,Khách hàng,TC_KH_01 - Tạo khách hàng mới,"TenKH = ""Trần Văn E"", SoDienThoai = ""0906789012""",POST /api/khachhang,Trả về 201 Created với khách hàng mới có DiemTichLuy = 0,,Pass
+19,Khách hàng,TC_KH_02 - Tìm khách hàng theo SĐT,SoDienThoai = ""0906789012"",GET /api/khachhang/sdt/0906789012,Trả về 200 OK với thông tin khách hàng,,Pass
+20,Logic,TC_LOGIC_01 - Tính tiền hóa đơn đúng,"Món 1: SL=2, Giá=25000; Món 2: SL=1, Giá=30000",Tính tổng tiền,TongTien = 80000 (2*25000 + 1*30000),,Pass
+21,Logic,TC_LOGIC_02 - Kiểm tra bàn trống,MaBan = 1 với TrangThai = ""Trống"",Kiểm tra trạng thái,Có thể tạo hóa đơn mới,,Pass
+22,Logic,TC_LOGIC_03 - Kiểm tra bàn đang sử dụng,MaBan = 2 với TrangThai = ""Đang sử dụng"",Kiểm tra trạng thái,Không thể tạo hóa đơn mới,,Pass
+23,Thống kê,TC_TK_01 - Thống kê doanh thu theo ngày,"TuNgay = ""2024-01-01"", DenNgay = ""2024-01-31""",GET /api/thongke/doanhthu/ngay,Trả về doanh thu từng ngày và tổng doanh thu tháng 1,,Pass
+24,Thống kê,TC_TK_02 - Thống kê doanh thu theo tháng,Nam = 2024,GET /api/thongke/doanhthu/thang,Trả về doanh thu 12 tháng trong năm 2024,,Pass
+25,Thống kê,TC_TK_03 - Thống kê món bán chạy,"TuNgay = ""2024-01-01"", DenNgay = ""2024-12-31"", Top = 10",GET /api/thongke/monbanchay,Trả về top 10 món bán chạy nhất với số lượng và doanh thu,,Pass
+26,Logic,TC_LOGIC_04 - Tích điểm khách hàng,Thanh toán hóa đơn 100000 VNĐ với MaKH = 2,Thanh toán,Khách hàng được cộng 10 điểm (100000/10000),,Pass
+27,Validation,TC_VAL_01 - Số lượng món âm,"MaHD = 1, MaMon = 1, SoLuong = -1",POST /api/hoadon/goimon,Trả về 400 BadRequest với thông báo số lượng không hợp lệ,,Pass
+28,Validation,TC_VAL_02 - Thanh toán hóa đơn không có món,MaHD = 5 (không có chi tiết),POST /api/hoadon/thanhtoan,Trả về 400 BadRequest với thông báo không thể thanh toán,,Pass
+

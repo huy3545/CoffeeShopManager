@@ -1,0 +1,127 @@
+<div class="navbar-brand">
+    ☕ Coffee Shop Manager
+</div>
+
+<AuthorizeView Context="authView">
+    <Authorized>
+        <div class="sidebar-top-account">
+            <span class="sidebar-user-name">👤 @authView.User.Identity?.Name</span>
+            <a class="sidebar-logout" href="/Account/Logout">Đăng xuất</a>
+        </div>
+    </Authorized>
+</AuthorizeView>
+
+<div class="nav-scrollable">
+    <nav class="flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span style="font-size: 1.2rem;">🏠</span> Trang chủ
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="ban">
+                <span style="font-size: 1.2rem;">🪑</span> Quản lý bàn
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="mon">
+                <span style="font-size: 1.2rem;">☕</span> Quản lý món
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="khuyenmai">
+                <span style="font-size: 1.2rem;">🎁</span> Khuyến mãi
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="goimon">
+                <span style="font-size: 1.2rem;">📋</span> Gọi món
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="hoadon">
+                <span style="font-size: 1.2rem;">💳</span> Hóa đơn
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="thongke">
+                <span style="font-size: 1.2rem;">📊</span> Thống kê
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="nhanvien">
+                <span style="font-size: 1.2rem;">👥</span> Nhân viên
+            </NavLink>
+        </div>
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="khachhang">
+                <span style="font-size: 1.2rem;">👤</span> Khách hàng
+            </NavLink>
+        </div>
+    </nav>
+</div>
+
+<div class="sidebar-account">
+    <AuthorizeView>
+        <Authorized>
+            <AuthorizeView Roles="Admin" Context="adminView">
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="account-management">
+                        <span style="font-size: 1.2rem;">🔐</span> Quản lý tài khoản
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="nhat-ky-hoat-dong">
+                        <span style="font-size: 1.2rem;">📝</span> Nhật ký thao tác
+                    </NavLink>
+                </div>
+            </AuthorizeView>
+            <div class="px-3 mt-2 text-white-50 small">Xin chào, @context.User.Identity?.Name</div>
+        </Authorized>
+    </AuthorizeView>
+</div>
+
+<div class="sidebar-time">
+    <div style="padding: 1rem; text-align: left; border-top: 1px solid rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.8); font-size: 0.9rem; line-height: 1.8;">
+        <div style="font-weight: 600; margin-bottom: 0.5rem;">@currentHour giờ @currentMinute phút</div>
+        <div>Ngày: @currentDay</div>
+        <div>Tháng: @currentMonth</div>
+        <div>Năm: @currentYear</div>
+    </div>
+</div>
+
+@implements IDisposable
+
+@code {
+    private int currentHour = DateTime.Now.Hour;
+    private int currentMinute = DateTime.Now.Minute;
+    private int currentDay = DateTime.Now.Day;
+    private int currentMonth = DateTime.Now.Month;
+    private int currentYear = DateTime.Now.Year;
+    private System.Threading.Timer? timer;
+
+    protected override void OnInitialized()
+    {
+        UpdateTime();
+        timer = new System.Threading.Timer(_ =>
+        {
+            UpdateTime();
+            InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+    }
+
+    private void UpdateTime()
+    {
+        var now = DateTime.Now;
+        currentHour = now.Hour;
+        currentMinute = now.Minute;
+        currentDay = now.Day;
+        currentMonth = now.Month;
+        currentYear = now.Year;
+    }
+
+    public void Dispose()
+    {
+        timer?.Dispose();
+    }
+}

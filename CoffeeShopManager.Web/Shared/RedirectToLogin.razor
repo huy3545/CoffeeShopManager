@@ -1,0 +1,22 @@
+@inject NavigationManager Navigation
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authenticationState = AuthenticationStateTask is null
+            ? null
+            : await AuthenticationStateTask;
+
+        if (authenticationState?.User.Identity?.IsAuthenticated == true)
+        {
+            Navigation.NavigateTo("/access-denied", forceLoad: true);
+            return;
+        }
+
+        var returnUrl = new Uri(Navigation.Uri).PathAndQuery;
+        Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString(returnUrl)}", forceLoad: true);
+    }
+}

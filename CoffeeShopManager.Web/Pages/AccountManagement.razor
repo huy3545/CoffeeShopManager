@@ -1,0 +1,440 @@
+@page "/account-management"
+@attribute [Authorize(Roles = "Admin")]
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.EntityFrameworkCore
+@using CoffeeShopManager.DAL.Data
+@inject UserManager<ApplicationUser> UserManager
+@inject RoleManager<IdentityRole> RoleManager
+@inject CoffeeShopDbContext DbContext
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject INhatKyHoatDongService AuditService
+
+<PageTitle>Quản lý tài khoản</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h2>🔐 Quản lý tài khoản</h2>
+        <p class="text-muted mb-0">Chỉ Admin mới có thể quản lý tài khoản và phân quyền.</p>
+    </div>
+    <button class="btn btn-primary" @onclick="BeginCreate">+ Thêm tài khoản</button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="alert @(isError ? "alert-danger" : "alert-success")" role="alert">@message</div>
+}
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <label class="form-label" for="accountSearch">Tìm kiếm tài khoản</label>
+        <input id="accountSearch" class="form-control" placeholder="Nhập username hoặc email"
+               @bind="searchText" @bind:event="oninput" />
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Nhân viên liên kết</th>
+                    <th>Trạng thái</th>
+                    <th class="text-end">Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var account in FilteredAccounts)
+                {
+                    <tr>
+                        <td>@account.User.UserName</td>
+                        <td>@account.User.Email</td>
+                        <td>@string.Join(", ", account.Roles)</td>
+                        <td>@(account.EmployeeName ?? "Chưa liên kết")</td>
+                        <td>
+                            @if (account.IsLocked)
+                            {
+                                <span class="badge text-bg-danger">Đã khóa</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-success">Đang hoạt động</span>
+                            }
+                        </td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => BeginEdit(account.User)">Sửa</button>
+                            <button class="btn btn-sm btn-outline-warning me-1" @onclick="() => ToggleLockAsync(account.User)">
+                                @(account.IsLocked ? "Mở khóa" : "Khóa")
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteAsync(account.User)">Xóa</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (showEditor)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal d-block" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(editingUser is null ? "Thêm tài khoản" : "Chỉnh sửa tài khoản")</h5>
+                    <button type="button" class="btn-close" @onclick="CloseEditor"></button>
+                </div>
+                <EditForm Model="form" OnValidSubmit="SaveAsync">
+                    <DataAnnotationsValidator />
+                    <div class="modal-body">
+                        @if (!string.IsNullOrWhiteSpace(editorError))
+                        {
+                            <div class="alert alert-danger">@editorError</div>
+                        }
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Username</label>
+                                <InputText class="form-control" @bind-Value="form.UserName" />
+                                <ValidationMessage For="@(() => form.UserName)" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Email</label>
+                                <InputText class="form-control" type="email" @bind-Value="form.Email" />
+                                <ValidationMessage For="@(() => form.Email)" />
+                            </div>
+                            @if (editingUser is null)
+                            {
+                                <div class="col-md-6">
+                                    <label class="form-label">Mật khẩu</label>
+                                    <InputText class="form-control" type="password" @bind-Value="form.Password" />
+                                    <small class="text-muted">Ít nhất 8 ký tự, có chữ hoa và chữ số.</small>
+                                    <ValidationMessage For="@(() => form.Password)" />
+                                </div>
+                            }
+                            <div class="col-md-6">
+                                <label class="form-label">Role</label>
+                                <InputSelect class="form-select" @bind-Value="form.Role">
+                                    @foreach (var role in roles)
+                                    {
+                                        <option value="@role">@role</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Nhân viên liên kết</label>
+                                <InputSelect class="form-select" @bind-Value="form.MaNV">
+                                    <option value="">-- Không liên kết --</option>
+                                    @foreach (var employee in employees)
+                                    {
+                                        <option value="@employee.MaNV">@employee.TenNV (@employee.MaNV)</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseEditor">Hủy</button>
+                        <button type="submit" class="btn btn-primary">Lưu</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly AccountForm form = new();
+    private List<AccountRow> accounts = new();
+    private List<string> roles = new();
+    private List<CoffeeShopManager.DAL.Entities.NhanVien> employees = new();
+    private ApplicationUser? editingUser;
+    private string searchText = string.Empty;
+    private string? message;
+    private string? editorError;
+    private bool isError;
+    private bool showEditor;
+    private string? currentUserId;
+
+    private IEnumerable<AccountRow> FilteredAccounts => accounts.Where(account =>
+        string.IsNullOrWhiteSpace(searchText)
+        || (account.User.UserName?.Contains(searchText, StringComparison.OrdinalIgnoreCase) ?? false)
+        || (account.User.Email?.Contains(searchText, StringComparison.OrdinalIgnoreCase) ?? false));
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = UserManager.GetUserId(authState.User);
+        roles = await RoleManager.Roles.Where(role => role.Name != null).Select(role => role.Name!).OrderBy(name => name).ToListAsync();
+        employees = await DbContext.NhanViens.AsNoTracking().OrderBy(employee => employee.TenNV).ToListAsync();
+        await LoadAccountsAsync();
+    }
+
+    private async Task LoadAccountsAsync()
+    {
+        accounts.Clear();
+        var users = await UserManager.Users.OrderBy(user => user.UserName).ToListAsync();
+        foreach (var user in users)
+        {
+            var userRoles = await UserManager.GetRolesAsync(user);
+            var employeeName = user.MaNV.HasValue
+                ? employees.FirstOrDefault(employee => employee.MaNV == user.MaNV.Value)?.TenNV
+                : null;
+            accounts.Add(new AccountRow(user, userRoles.ToList(), employeeName));
+        }
+    }
+
+    private void BeginCreate()
+    {
+        editingUser = null;
+        form.Reset();
+        form.Role = roles.Contains("Staff") ? "Staff" : roles.FirstOrDefault() ?? "Staff";
+        editorError = null;
+        showEditor = true;
+    }
+
+    private void BeginEdit(ApplicationUser user)
+    {
+        editingUser = user;
+        form.UserName = user.UserName ?? string.Empty;
+        form.Email = user.Email ?? string.Empty;
+        form.Password = string.Empty;
+        form.MaNV = user.MaNV;
+        form.Role = accounts.FirstOrDefault(account => account.User.Id == user.Id)?.Roles.FirstOrDefault() ?? "Staff";
+        editorError = null;
+        showEditor = true;
+    }
+
+    private void CloseEditor()
+    {
+        showEditor = false;
+        editorError = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        editorError = null;
+        if (!roles.Contains(form.Role))
+        {
+            editorError = "Role không hợp lệ.";
+            return;
+        }
+
+        if (editingUser is null)
+        {
+            if (string.IsNullOrWhiteSpace(form.Password))
+            {
+                editorError = "Mật khẩu không được để trống.";
+                return;
+            }
+
+            var user = new ApplicationUser
+            {
+                UserName = form.UserName.Trim(),
+                Email = form.Email.Trim(),
+                EmailConfirmed = true,
+                MaNV = form.MaNV
+            };
+            var createResult = await UserManager.CreateAsync(user, form.Password);
+            if (!createResult.Succeeded)
+            {
+                editorError = FormatErrors(createResult.Errors);
+                return;
+            }
+
+            var roleResult = await UserManager.AddToRoleAsync(user, form.Role);
+            if (!roleResult.Succeeded)
+            {
+                await UserManager.DeleteAsync(user);
+                editorError = FormatErrors(roleResult.Errors);
+                return;
+            }
+
+            message = "Đã tạo tài khoản thành công.";
+            await WriteAuditAsync("Thêm", "Tài khoản", user.Id, $"Tạo tài khoản {user.UserName} với vai trò {form.Role}.", null, $"Role={form.Role}; MaNV={form.MaNV}");
+        }
+        else
+        {
+            if (editingUser.Id == currentUserId && !string.Equals(form.Role, (await UserManager.GetRolesAsync(editingUser)).FirstOrDefault(), StringComparison.OrdinalIgnoreCase))
+            {
+                editorError = "Bạn không được tự thay đổi role của chính mình.";
+                return;
+            }
+
+            var emailResult = await UserManager.SetEmailAsync(editingUser, form.Email.Trim());
+            if (!emailResult.Succeeded)
+            {
+                editorError = FormatErrors(emailResult.Errors);
+                return;
+            }
+
+            var userNameResult = await UserManager.SetUserNameAsync(editingUser, form.UserName.Trim());
+            if (!userNameResult.Succeeded)
+            {
+                editorError = FormatErrors(userNameResult.Errors);
+                return;
+            }
+
+            editingUser.MaNV = form.MaNV;
+            var updateResult = await UserManager.UpdateAsync(editingUser);
+            if (!updateResult.Succeeded)
+            {
+                editorError = FormatErrors(updateResult.Errors);
+                return;
+            }
+
+            var existingRoles = await UserManager.GetRolesAsync(editingUser);
+            if (existingRoles.Contains("Admin")
+                && !string.Equals(form.Role, "Admin", StringComparison.OrdinalIgnoreCase)
+                && (await UserManager.GetUsersInRoleAsync("Admin")).Count <= 1)
+            {
+                editorError = "Không thể hạ quyền Admin cuối cùng trong hệ thống.";
+                return;
+            }
+
+            if (!existingRoles.Contains(form.Role))
+            {
+                var removeResult = await UserManager.RemoveFromRolesAsync(editingUser, existingRoles);
+                if (!removeResult.Succeeded)
+                {
+                    editorError = FormatErrors(removeResult.Errors);
+                    return;
+                }
+
+                var addResult = await UserManager.AddToRoleAsync(editingUser, form.Role);
+                if (!addResult.Succeeded)
+                {
+                    editorError = FormatErrors(addResult.Errors);
+                    return;
+                }
+            }
+
+            message = "Đã cập nhật tài khoản thành công.";
+            await WriteAuditAsync("Sửa", "Tài khoản", editingUser.Id, $"Cập nhật tài khoản {editingUser.UserName}.", null, $"Role={form.Role}; MaNV={form.MaNV}");
+        }
+
+        isError = false;
+        showEditor = false;
+        await LoadAccountsAsync();
+    }
+
+    private async Task ToggleLockAsync(ApplicationUser user)
+    {
+        if (user.Id == currentUserId)
+        {
+            ShowError("Bạn không thể tự khóa tài khoản đang đăng nhập.");
+            return;
+        }
+
+        user.LockoutEnabled = true;
+        user.LockoutEnd = user.LockoutEnd.HasValue && user.LockoutEnd > DateTimeOffset.UtcNow
+            ? null
+            : DateTimeOffset.UtcNow.AddYears(100);
+        var result = await UserManager.UpdateAsync(user);
+        if (!result.Succeeded)
+        {
+            ShowError(FormatErrors(result.Errors));
+            return;
+        }
+
+        message = user.LockoutEnd.HasValue ? "Đã khóa tài khoản." : "Đã mở khóa tài khoản.";
+        isError = false;
+        await WriteAuditAsync(user.LockoutEnd.HasValue ? "Khóa tài khoản" : "Mở khóa tài khoản", "Tài khoản", user.Id, $"{message} {user.UserName}.");
+        await LoadAccountsAsync();
+    }
+
+    private async Task DeleteAsync(ApplicationUser user)
+    {
+        if (user.Id == currentUserId)
+        {
+            ShowError("Bạn không thể tự xóa tài khoản đang đăng nhập.");
+            return;
+        }
+
+        var userRoles = await UserManager.GetRolesAsync(user);
+        if (userRoles.Contains("Admin") && await UserManager.GetUsersInRoleAsync("Admin") is { Count: <= 1 })
+        {
+            ShowError("Không thể xóa Admin cuối cùng trong hệ thống.");
+            return;
+        }
+
+        var result = await UserManager.DeleteAsync(user);
+        if (!result.Succeeded)
+        {
+            ShowError(FormatErrors(result.Errors));
+            return;
+        }
+
+        message = "Đã xóa tài khoản.";
+        isError = false;
+        await WriteAuditAsync("Xóa", "Tài khoản", user.Id, $"Xóa tài khoản {user.UserName}.");
+        await LoadAccountsAsync();
+    }
+
+    private async Task WriteAuditAsync(string action, string objectType, string? objectId, string description, string? oldData = null, string? newData = null)
+    {
+        try
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var principal = authState.User;
+            await AuditService.GhiNhanAsync(new GhiNhatKyDto
+            {
+                MaNguoiDung = UserManager.GetUserId(principal),
+                TenNguoiDung = principal.Identity?.Name,
+                VaiTro = (await UserManager.GetRolesAsync(await UserManager.GetUserAsync(principal) ?? new ApplicationUser())).FirstOrDefault(),
+                HanhDong = action,
+                LoaiDoiTuong = objectType,
+                MaDoiTuong = objectId,
+                MoTa = description,
+                DuLieuCu = oldData,
+                DuLieuMoi = newData
+            });
+        }
+        catch
+        {
+            // Nhật ký không được làm hỏng thao tác nghiệp vụ chính.
+        }
+    }
+
+    private void ShowError(string text)
+    {
+        message = text;
+        isError = true;
+    }
+
+    private static string FormatErrors(IEnumerable<IdentityError> errors) =>
+        string.Join(" ", errors.Select(error => error.Description));
+
+    private sealed record AccountRow(ApplicationUser User, List<string> Roles, string? EmployeeName)
+    {
+        public bool IsLocked => User.LockoutEnd.HasValue && User.LockoutEnd > DateTimeOffset.UtcNow;
+    }
+
+    private sealed class AccountForm
+    {
+        [Required(ErrorMessage = "Username không được để trống.")]
+        public string UserName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Email không được để trống.")]
+        [EmailAddress(ErrorMessage = "Email không đúng định dạng.")]
+        public string Email { get; set; } = string.Empty;
+
+        [MinLength(8, ErrorMessage = "Mật khẩu phải có ít nhất 8 ký tự.")]
+        public string Password { get; set; } = string.Empty;
+
+        public string Role { get; set; } = "Staff";
+        public int? MaNV { get; set; }
+
+        public void Reset()
+        {
+            UserName = string.Empty;
+            Email = string.Empty;
+            Password = string.Empty;
+            Role = "Staff";
+            MaNV = null;
+        }
+    }
+}

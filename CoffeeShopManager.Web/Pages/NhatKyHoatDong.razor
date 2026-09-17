@@ -1,0 +1,100 @@
+@page "/nhat-ky-hoat-dong"
+@attribute [Authorize(Roles = "Admin")]
+@inject INhatKyHoatDongService AuditService
+
+<PageTitle>Nhật ký thao tác người dùng</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h2>📝 Nhật ký thao tác người dùng</h2>
+        <p class="text-muted mb-0">Theo dõi các thao tác quản trị để hỗ trợ kiểm tra và truy vết.</p>
+    </div>
+    <button class="btn btn-outline-secondary" @onclick="LoadAsync">Làm mới</button>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">Tìm kiếm</label>
+                <input class="form-control" placeholder="Người dùng, mô tả, đối tượng" @bind="searchText" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Hành động</label>
+                <select class="form-select" @bind="action">
+                    <option value="">Tất cả</option>
+                    @foreach (var item in Actions)
+                    {
+                        <option value="@item">@item</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Từ ngày</label>
+                <input type="date" class="form-control" @bind="fromDate" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Đến ngày</label>
+                <input type="date" class="form-control" @bind="toDate" />
+            </div>
+            <div class="col-md-1">
+                <button class="btn btn-primary w-100" @onclick="LoadAsync">Lọc</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="alert alert-info py-2">Chỉ hiển thị tối đa 1.000 bản ghi gần nhất. Nhật ký không thể chỉnh sửa hoặc xóa.</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Thời gian</th>
+                    <th>Người dùng</th>
+                    <th>Hành động</th>
+                    <th>Đối tượng</th>
+                    <th>Mô tả</th>
+                    <th>Kết quả</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (logs.Count == 0)
+                {
+                    <tr><td colspan="6" class="text-center text-muted py-4">Chưa có nhật ký phù hợp.</td></tr>
+                }
+                else
+                {
+                    @foreach (var log in logs)
+                    {
+                        <tr>
+                            <td>@log.ThoiGianThucHien.ToString("dd/MM/yyyy HH:mm:ss")</td>
+                            <td>@(log.TenNguoiDung ?? "Hệ thống")<br /><small class="text-muted">@log.VaiTro</small></td>
+                            <td><span class="badge text-bg-secondary">@log.HanhDong</span></td>
+                            <td>@log.LoaiDoiTuong @(string.IsNullOrWhiteSpace(log.MaDoiTuong) ? "" : $"#{log.MaDoiTuong}")</td>
+                            <td>@log.MoTa</td>
+                            <td><span class="badge @(log.KetQua == "Thành công" ? "text-bg-success" : "text-bg-danger")">@log.KetQua</span></td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    private List<NhatKyHoatDongDto> logs = new();
+    private string searchText = string.Empty;
+    private string action = string.Empty;
+    private DateTime? fromDate;
+    private DateTime? toDate;
+    private static readonly string[] Actions = { "Đăng nhập", "Đăng xuất", "Thêm", "Sửa", "Xóa", "Khóa tài khoản", "Mở khóa tài khoản" };
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        logs = (await AuditService.SearchAsync(searchText, action, fromDate, toDate)).ToList();
+    }
+}
