@@ -642,11 +642,3 @@ Dự án đáp ứng đầy đủ yêu cầu rubric:
 - 3+ logic test cases
 - 24+ unit tests với xUnit
 
-## 🤝 Đóng Góp
-
-Dự án được neiht phát triển cho mục đích báo cáo - môn Lập trình Back-End.
-
-## 📄 License
-
-MIT License - Được cấp bởi neiht.id.vn.
-
