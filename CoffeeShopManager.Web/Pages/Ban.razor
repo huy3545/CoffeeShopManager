@@ -39,43 +39,41 @@
     Xem lịch đặt bàn
 </button>
 
+<div class="table-status-legend mb-3">
+    <span><i class="status-dot status-empty"></i> Trống</span>
+    <span><i class="status-dot status-using"></i> Đang sử dụng</span>
+    <span><i class="status-dot status-booked"></i> Đã đặt</span>
+</div>
+
 @if (bans == null)
 {
     <p><em>Đang tải...</em></p>
 }
 else
 {
-    <div class="table-responsive">
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th>Mã bàn</th>
-                    <th>Tên bàn</th>
-                    <th>Trạng thái</th>
-                    <th>Thao tác</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var ban in bans)
-                {
-                    <tr>
-                        <td><strong>#@ban.MaBan</strong></td>
-                        <td>@ban.TenBan</td>
-                        <td>
-                            <span class="badge @GetStatusClass(ban.TrangThai)">@ban.TrangThai</span>
-                        </td>
-                        <td>
-                            @if (canManage)
-                            {
-                                <button class="btn btn-sm btn-warning" @onclick="() => ShowEditModal(ban)">Sửa</button>
-                                <button class="btn btn-sm btn-danger" @onclick="() => DeleteBan(ban.MaBan)">Xóa</button>
-                            }
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+    <div class="table-card-grid mb-4">
+        @foreach (var ban in bans)
+        {
+            <div class="table-card @GetTableCardStatusClass(ban.TrangThai)">
+                <div class="table-card-header">
+                    <span class="table-card-number">#@ban.MaBan</span>
+                    <span class="badge @GetStatusClass(ban.TrangThai)">@ban.TrangThai</span>
+                </div>
+                <div class="table-visual @GetTableVisualClass(ban.TenBan)">
+                    <span>@GetTableIcon(ban.TenBan)</span>
+                </div>
+                <h5>@ban.TenBan</h5>
+                <div class="table-card-actions">
+                    @if (canManage)
+                    {
+                        <button class="btn btn-sm btn-warning" @onclick="() => ShowEditModal(ban)">Sửa</button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => DeleteBan(ban.MaBan)">Xóa</button>
+                    }
+                </div>
+            </div>
+        }
     </div>
+
 }
 
 @if (showBookingModal)
@@ -316,6 +314,24 @@ else
             _ => "bg-secondary"
         };
     }
+
+    private static string GetTableCardStatusClass(string trangThai) => trangThai switch
+    {
+        "Trống" => "table-card-empty",
+        "Đang sử dụng" => "table-card-using",
+        "Đã đặt" => "table-card-booked",
+        _ => "table-card-other"
+    };
+
+    private static string GetTableVisualClass(string tenBan) => tenBan.Contains("VIP", StringComparison.OrdinalIgnoreCase)
+        ? "table-visual-vip"
+        : tenBan.Equals("Mang về", StringComparison.OrdinalIgnoreCase)
+            ? "table-visual-takeaway"
+            : "table-visual-standard";
+
+    private static string GetTableIcon(string tenBan) => tenBan.Contains("VIP", StringComparison.OrdinalIgnoreCase)
+        ? "👑"
+        : tenBan.Equals("Mang về", StringComparison.OrdinalIgnoreCase) ? "🛍️" : "🪑";
 
     private void ShowAddModal()
     {
