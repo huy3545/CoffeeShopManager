@@ -145,6 +145,57 @@ namespace CoffeeShopManager.DAL.Migrations
                         });
                 });
 
+            modelBuilder.Entity("CoffeeShopManager.DAL.Entities.CaLamViec", b =>
+                {
+                    b.Property<int>("MaCa")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("GhiChu")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LoaiCa")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LoaiNhanVien")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("NgayTao")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NguoiTao")
+                        .HasMaxLength(450)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SoLuongNhanVienCan")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TenCa")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ThoiGianBatDau")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ThoiGianKetThuc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TrangThai")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("MaCa");
+
+                    b.ToTable("CaLamViec");
+                });
+
             modelBuilder.Entity("CoffeeShopManager.DAL.Entities.ChiTietHD", b =>
                 {
                     b.Property<int>("MaChiTiet")
@@ -170,6 +221,51 @@ namespace CoffeeShopManager.DAL.Migrations
                     b.HasIndex("MaMon");
 
                     b.ToTable("ChiTietHD");
+                });
+
+            modelBuilder.Entity("CoffeeShopManager.DAL.Entities.DangKyCa", b =>
+                {
+                    b.Property<int>("MaDangKy")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("GhiChu")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MaCa")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("MaNV")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("MaNguoiDung")
+                        .HasMaxLength(450)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NguoiDuyet")
+                        .HasMaxLength(450)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ThoiGianDangKy")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ThoiGianDuyet")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TrangThai")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("MaDangKy");
+
+                    b.HasIndex("MaNV");
+
+                    b.HasIndex("MaCa", "MaNV")
+                        .IsUnique();
+
+                    b.ToTable("DangKyCa");
                 });
 
             modelBuilder.Entity("CoffeeShopManager.DAL.Entities.DatBan", b =>
@@ -437,6 +533,10 @@ namespace CoffeeShopManager.DAL.Migrations
                     b.Property<decimal>("DonGia")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("HinhAnh")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Loai")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -539,6 +639,11 @@ namespace CoffeeShopManager.DAL.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("LoaiNhanVien")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("SoDienThoai")
                         .HasMaxLength(15)
                         .HasColumnType("TEXT");
@@ -558,6 +663,7 @@ namespace CoffeeShopManager.DAL.Migrations
                             MaNV = 1,
                             CaLam = "Sáng",
                             Email = "nva@coffee.com",
+                            LoaiNhanVien = "Part-time",
                             SoDienThoai = "0901234567",
                             TenNV = "Nguyễn Văn A"
                         },
@@ -566,6 +672,7 @@ namespace CoffeeShopManager.DAL.Migrations
                             MaNV = 2,
                             CaLam = "Chiều",
                             Email = "ttb@coffee.com",
+                            LoaiNhanVien = "Part-time",
                             SoDienThoai = "0902345678",
                             TenNV = "Trần Thị B"
                         },
@@ -574,6 +681,7 @@ namespace CoffeeShopManager.DAL.Migrations
                             MaNV = 3,
                             CaLam = "Tối",
                             Email = "lvc@coffee.com",
+                            LoaiNhanVien = "Part-time",
                             SoDienThoai = "0903456789",
                             TenNV = "Lê Văn C"
                         });
@@ -795,6 +903,25 @@ namespace CoffeeShopManager.DAL.Migrations
                     b.Navigation("Mon");
                 });
 
+            modelBuilder.Entity("CoffeeShopManager.DAL.Entities.DangKyCa", b =>
+                {
+                    b.HasOne("CoffeeShopManager.DAL.Entities.CaLamViec", "CaLamViec")
+                        .WithMany("DangKyCas")
+                        .HasForeignKey("MaCa")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("CoffeeShopManager.DAL.Entities.NhanVien", "NhanVien")
+                        .WithMany()
+                        .HasForeignKey("MaNV")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CaLamViec");
+
+                    b.Navigation("NhanVien");
+                });
+
             modelBuilder.Entity("CoffeeShopManager.DAL.Entities.DatBan", b =>
                 {
                     b.HasOne("CoffeeShopManager.DAL.Entities.Ban", "Ban")
@@ -931,6 +1058,11 @@ namespace CoffeeShopManager.DAL.Migrations
                     b.Navigation("DatBans");
 
                     b.Navigation("HoaDons");
+                });
+
+            modelBuilder.Entity("CoffeeShopManager.DAL.Entities.CaLamViec", b =>
+                {
+                    b.Navigation("DangKyCas");
                 });
 
             modelBuilder.Entity("CoffeeShopManager.DAL.Entities.HoaDon", b =>

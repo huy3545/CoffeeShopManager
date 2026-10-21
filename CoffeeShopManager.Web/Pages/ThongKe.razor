@@ -5,7 +5,7 @@
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Dashboard doanh thu</PageTitle>
-<h2>📊 Thống kê doanh thu</h2>
+<h2><i class="bi bi-bar-chart-fill"></i> Thống kê doanh thu</h2>
 
 @if (!string.IsNullOrEmpty(errorMessage))
 {
@@ -37,9 +37,9 @@
 
     <div class="row g-3 mb-4">
         <div class="col-md-3"><div class="card dashboard-kpi kpi-revenue"><div class="card-body"><span>💰 Tổng doanh thu</span><strong>@dashboard.TongDoanhThu.ToString("N0") ₫</strong></div></div></div>
-        <div class="col-md-3"><div class="card dashboard-kpi kpi-invoice"><div class="card-body"><span>🧾 Hóa đơn đã thanh toán</span><strong>@dashboard.SoHoaDon</strong></div></div></div>
-        <div class="col-md-3"><div class="card dashboard-kpi kpi-average"><div class="card-body"><span>📈 Trung bình/hóa đơn</span><strong>@dashboard.GiaTriTrungBinhHoaDon.ToString("N0") ₫</strong></div></div></div>
-        <div class="col-md-3"><div class="card dashboard-kpi kpi-discount"><div class="card-body"><span>🎁 Tổng tiền giảm</span><strong>@((dashboard.TienGiamKhuyenMai + dashboard.TienGiamTuDiem).ToString("N0")) ₫</strong></div></div></div>
+        <div class="col-md-3"><div class="card dashboard-kpi kpi-invoice"><div class="card-body"><span><i class="bi bi-receipt"></i> Hóa đơn đã thanh toán</span><strong>@dashboard.SoHoaDon</strong></div></div></div>
+        <div class="col-md-3"><div class="card dashboard-kpi kpi-average"><div class="card-body"><span><i class="bi bi-graph-up-arrow"></i> Trung bình/hóa đơn</span><strong>@dashboard.GiaTriTrungBinhHoaDon.ToString("N0") ₫</strong></div></div></div>
+        <div class="col-md-3"><div class="card dashboard-kpi kpi-discount"><div class="card-body"><span><i class="bi bi-tag-fill"></i> Tổng tiền giảm</span><strong>@((dashboard.TienGiamKhuyenMai + dashboard.TienGiamTuDiem).ToString("N0")) ₫</strong></div></div></div>
     </div>
 
     <div class="row g-4 mb-4">

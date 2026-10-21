@@ -5,7 +5,7 @@
 
 <PageTitle>Quản lý nhân viên</PageTitle>
 
-<h2>👥 Quản lý nhân viên</h2>
+<h2><i class="bi bi-people-fill"></i> Quản lý nhân viên</h2>
 
 @if (!string.IsNullOrEmpty(errorMessage))
 {
@@ -18,7 +18,7 @@
 @if (!string.IsNullOrEmpty(successMessage))
 {
     <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <strong>✅ Thành công!</strong> @successMessage
+        <strong><i class="bi bi-check-circle-fill"></i> Thành công!</strong> @successMessage
         <button type="button" class="btn-close" @onclick="@(() => successMessage = string.Empty)"></button>
     </div>
 }
@@ -40,6 +40,7 @@ else
                     <th>Mã NV</th>
                     <th>Tên nhân viên</th>
                     <th>Ca làm</th>
+                    <th>Loại</th>
                     <th>Số điện thoại</th>
                     <th>Email</th>
                     <th>Thao tác</th>
@@ -52,6 +53,7 @@ else
                         <td><strong>#@nv.MaNV</strong></td>
                         <td>@nv.TenNV</td>
                         <td><span class="badge bg-primary">@nv.CaLam</span></td>
+                        <td><span class="badge bg-info">@nv.LoaiNhanVien</span></td>
                         <td>@(nv.SoDienThoai ?? "-")</td>
                         <td>@(nv.Email ?? "-")</td>
                         <td>
@@ -89,6 +91,13 @@ else
                         </select>
                     </div>
                     <div class="mb-3">
+                        <label class="form-label">Loại nhân viên <span class="text-danger">*</span></label>
+                        <select class="form-select" @bind="formLoaiNhanVien">
+                            <option value="Part-time">Part-time</option>
+                            <option value="Full-time">Full-time</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label">Số điện thoại</label>
                         <input type="tel" class="form-control" @bind="formSoDienThoai" placeholder="0901234567" />
                     </div>
@@ -119,6 +128,7 @@ else
     private int? editingNVId = null;
     private string formTenNV = string.Empty;
     private string formCaLam = "Sáng";
+    private string formLoaiNhanVien = "Part-time";
     private string formSoDienThoai = string.Empty;
     private string formEmail = string.Empty;
 
@@ -146,6 +156,7 @@ else
         editingNVId = null;
         formTenNV = string.Empty;
         formCaLam = "Sáng";
+        formLoaiNhanVien = "Part-time";
         formSoDienThoai = string.Empty;
         formEmail = string.Empty;
         showModal = true;
@@ -159,6 +170,7 @@ else
         editingNVId = nv.MaNV;
         formTenNV = nv.TenNV;
         formCaLam = nv.CaLam;
+        formLoaiNhanVien = nv.LoaiNhanVien;
         formSoDienThoai = nv.SoDienThoai ?? string.Empty;
         formEmail = nv.Email ?? string.Empty;
         showModal = true;
@@ -173,6 +185,7 @@ else
         editingNVId = null;
         formTenNV = string.Empty;
         formCaLam = "Sáng";
+        formLoaiNhanVien = "Part-time";
         formSoDienThoai = string.Empty;
         formEmail = string.Empty;
     }
@@ -194,6 +207,7 @@ else
                 {
                     TenNV = formTenNV,
                     CaLam = formCaLam,
+                    LoaiNhanVien = formLoaiNhanVien,
                     SoDienThoai = formSoDienThoai,
                     Email = formEmail
                 };
@@ -207,6 +221,7 @@ else
                 {
                     TenNV = formTenNV,
                     CaLam = formCaLam,
+                    LoaiNhanVien = formLoaiNhanVien,
                     SoDienThoai = formSoDienThoai,
                     Email = formEmail
                 };

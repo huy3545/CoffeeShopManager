@@ -7,6 +7,8 @@ namespace CoffeeShopManager.DAL.Repositories;
 public interface INhatKyHoatDongRepository : IRepository<NhatKyHoatDong>
 {
     Task<IEnumerable<NhatKyHoatDong>> SearchAsync(string? searchText, string? action, DateTime? from, DateTime? to);
+    Task<int> DeleteOlderThanAsync(DateTime cutoff);
+    Task<int> DeleteAllAsync();
 }
 
 public class NhatKyHoatDongRepository : Repository<NhatKyHoatDong>, INhatKyHoatDongRepository
@@ -28,4 +30,9 @@ public class NhatKyHoatDongRepository : Repository<NhatKyHoatDong>, INhatKyHoatD
         if (to.HasValue) query = query.Where(x => x.ThoiGianThucHien < to.Value.Date.AddDays(1));
         return await query.OrderByDescending(x => x.ThoiGianThucHien).Take(1000).ToListAsync();
     }
+
+    public Task<int> DeleteOlderThanAsync(DateTime cutoff) =>
+        _dbSet.Where(x => x.ThoiGianThucHien <= cutoff).ExecuteDeleteAsync();
+
+    public Task<int> DeleteAllAsync() => _dbSet.ExecuteDeleteAsync();
 }

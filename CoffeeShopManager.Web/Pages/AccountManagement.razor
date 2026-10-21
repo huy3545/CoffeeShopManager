@@ -8,12 +8,13 @@
 @inject CoffeeShopDbContext DbContext
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject INhatKyHoatDongService AuditService
+@inject IServiceScopeFactory ScopeFactory
 
 <PageTitle>Quản lý tài khoản</PageTitle>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-        <h2>🔐 Quản lý tài khoản</h2>
+        <h2><i class="bi bi-shield-lock-fill"></i> Quản lý tài khoản</h2>
         <p class="text-muted mb-0">Chỉ Admin mới có thể quản lý tài khoản và phân quyền.</p>
     </div>
     <button class="btn btn-primary" @onclick="BeginCreate">+ Thêm tài khoản</button>
@@ -175,8 +176,9 @@
 
     private async Task LoadAccountsAsync()
     {
+        DbContext.ChangeTracker.Clear();
         accounts.Clear();
-        var users = await UserManager.Users.OrderBy(user => user.UserName).ToListAsync();
+        var users = await UserManager.Users.AsNoTracking().OrderBy(user => user.UserName).ToListAsync();
         foreach (var user in users)
         {
             var userRoles = await UserManager.GetRolesAsync(user);
@@ -216,6 +218,20 @@
 
     private async Task SaveAsync()
     {
+        try
+        {
+            await SaveCoreAsync();
+        }
+        catch (Exception ex)
+        {
+            editorError = $"Không thể lưu tài khoản: {ex.Message}";
+            isError = true;
+            Console.Error.WriteLine($"AccountManagement SaveAsync error: {ex}");
+        }
+    }
+
+    private async Task SaveCoreAsync()
+    {
         editorError = null;
         if (!roles.Contains(form.Role))
         {
@@ -228,6 +244,12 @@
             if (string.IsNullOrWhiteSpace(form.Password))
             {
                 editorError = "Mật khẩu không được để trống.";
+                return;
+            }
+
+            if (await IsEmployeeAlreadyLinkedAsync(form.MaNV, null))
+            {
+                editorError = "Nhân viên này đã được liên kết với một tài khoản khác.";
                 return;
             }
 
@@ -264,18 +286,46 @@
                 return;
             }
 
-            var emailResult = await UserManager.SetEmailAsync(editingUser, form.Email.Trim());
-            if (!emailResult.Succeeded)
+            if (await IsEmployeeAlreadyLinkedAsync(form.MaNV, editingUser.Id))
             {
-                editorError = FormatErrors(emailResult.Errors);
+                editorError = "Nhân viên này đã được liên kết với một tài khoản khác.";
                 return;
             }
 
-            var userNameResult = await UserManager.SetUserNameAsync(editingUser, form.UserName.Trim());
-            if (!userNameResult.Succeeded)
+            var newUserName = form.UserName.Trim();
+            var duplicateUserName = await UserManager.FindByNameAsync(newUserName);
+            if (duplicateUserName is not null && duplicateUserName.Id != editingUser.Id)
             {
-                editorError = FormatErrors(userNameResult.Errors);
+                editorError = $"Username '{newUserName}' đã tồn tại. Vui lòng chọn username khác.";
                 return;
+            }
+
+            var newEmail = form.Email.Trim();
+            var duplicateEmail = await UserManager.FindByEmailAsync(newEmail);
+            if (duplicateEmail is not null && duplicateEmail.Id != editingUser.Id)
+            {
+                editorError = $"Email '{newEmail}' đã được sử dụng bởi tài khoản khác.";
+                return;
+            }
+
+            if (!string.Equals(editingUser.Email, newEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                var emailResult = await UserManager.SetEmailAsync(editingUser, newEmail);
+                if (!emailResult.Succeeded)
+                {
+                    editorError = FormatErrors(emailResult.Errors);
+                    return;
+                }
+            }
+
+            if (!string.Equals(editingUser.UserName, newUserName, StringComparison.Ordinal))
+            {
+                var userNameResult = await UserManager.SetUserNameAsync(editingUser, newUserName);
+                if (!userNameResult.Succeeded)
+                {
+                    editorError = FormatErrors(userNameResult.Errors);
+                    return;
+                }
             }
 
             editingUser.MaNV = form.MaNV;
@@ -286,34 +336,60 @@
                 return;
             }
 
+            var targetRole = roles.FirstOrDefault(role => string.Equals(role, form.Role, StringComparison.OrdinalIgnoreCase));
+            if (targetRole is null || !await RoleManager.RoleExistsAsync(targetRole))
+            {
+                editorError = "Role được chọn không tồn tại trong hệ thống.";
+                return;
+            }
+
             var existingRoles = await UserManager.GetRolesAsync(editingUser);
-            if (existingRoles.Contains("Admin")
-                && !string.Equals(form.Role, "Admin", StringComparison.OrdinalIgnoreCase)
+            if (existingRoles.Any(role => string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase))
+                && !string.Equals(targetRole, "Admin", StringComparison.OrdinalIgnoreCase)
                 && (await UserManager.GetUsersInRoleAsync("Admin")).Count <= 1)
             {
                 editorError = "Không thể hạ quyền Admin cuối cùng trong hệ thống.";
                 return;
             }
 
-            if (!existingRoles.Contains(form.Role))
+            var hasTargetRole = existingRoles.Any(role => string.Equals(role, targetRole, StringComparison.OrdinalIgnoreCase));
+            if (!hasTargetRole || existingRoles.Count != 1)
             {
-                var removeResult = await UserManager.RemoveFromRolesAsync(editingUser, existingRoles);
-                if (!removeResult.Succeeded)
+                var targetRoleEntity = await RoleManager.FindByNameAsync(targetRole);
+                if (targetRoleEntity is null)
                 {
-                    editorError = FormatErrors(removeResult.Errors);
+                    editorError = "Không tìm thấy role trong cơ sở dữ liệu.";
                     return;
                 }
 
-                var addResult = await UserManager.AddToRoleAsync(editingUser, form.Role);
-                if (!addResult.Succeeded)
+                // Thay thế trực tiếp liên kết role của tài khoản trong AspNetUserRoles.
+                // Cách này bảo đảm tài khoản chỉ còn đúng một role sau khi lưu.
+                var currentRoleLinks = await DbContext.UserRoles
+                    .Where(link => link.UserId == editingUser.Id)
+                    .ToListAsync();
+                DbContext.UserRoles.RemoveRange(currentRoleLinks);
+                await DbContext.SaveChangesAsync();
+
+                DbContext.UserRoles.Add(new IdentityUserRole<string>
                 {
-                    editorError = FormatErrors(addResult.Errors);
-                    return;
-                }
+                    UserId = editingUser.Id,
+                    RoleId = targetRoleEntity.Id
+                });
+                await DbContext.SaveChangesAsync();
+            }
+
+            DbContext.ChangeTracker.Clear();
+            var savedUser = await UserManager.FindByIdAsync(editingUser.Id);
+            editingUser = savedUser;
+            var savedRoles = savedUser is null ? Array.Empty<string>() : await UserManager.GetRolesAsync(savedUser);
+            if (!savedRoles.Any(role => string.Equals(role, targetRole, StringComparison.OrdinalIgnoreCase)))
+            {
+                editorError = "Role chưa được lưu đúng. Vui lòng thử lại.";
+                return;
             }
 
             message = "Đã cập nhật tài khoản thành công.";
-            await WriteAuditAsync("Sửa", "Tài khoản", editingUser.Id, $"Cập nhật tài khoản {editingUser.UserName}.", null, $"Role={form.Role}; MaNV={form.MaNV}");
+            await WriteAuditAsync("Sửa", "Tài khoản", savedUser!.Id, $"Cập nhật tài khoản {savedUser.UserName}.", null, $"Role={targetRole}; MaNV={form.MaNV}");
         }
 
         isError = false;
@@ -321,57 +397,96 @@
         await LoadAccountsAsync();
     }
 
+    private Task<bool> IsEmployeeAlreadyLinkedAsync(int? maNV, string? currentUserId) =>
+        maNV.HasValue && maNV.Value > 0
+            ? UserManager.Users.AnyAsync(user => user.MaNV == maNV.Value && user.Id != currentUserId)
+            : Task.FromResult(false);
+
     private async Task ToggleLockAsync(ApplicationUser user)
     {
-        if (user.Id == currentUserId)
+        try
         {
-            ShowError("Bạn không thể tự khóa tài khoản đang đăng nhập.");
-            return;
-        }
+            if (user.Id == currentUserId)
+            {
+                ShowError("Bạn không thể tự khóa tài khoản đang đăng nhập.");
+                return;
+            }
 
-        user.LockoutEnabled = true;
-        user.LockoutEnd = user.LockoutEnd.HasValue && user.LockoutEnd > DateTimeOffset.UtcNow
-            ? null
-            : DateTimeOffset.UtcNow.AddYears(100);
-        var result = await UserManager.UpdateAsync(user);
-        if (!result.Succeeded)
+            using var scope = ScopeFactory.CreateScope();
+            var scopedUserManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var targetUser = await scopedUserManager.FindByIdAsync(user.Id);
+            if (targetUser is null)
+            {
+                ShowError("Không tìm thấy tài khoản cần khóa hoặc mở khóa.");
+                return;
+            }
+
+            targetUser.LockoutEnabled = true;
+            targetUser.LockoutEnd = targetUser.LockoutEnd.HasValue && targetUser.LockoutEnd > DateTimeOffset.UtcNow
+                ? null
+                : DateTimeOffset.UtcNow.AddYears(100);
+            var result = await scopedUserManager.UpdateAsync(targetUser);
+            if (!result.Succeeded)
+            {
+                ShowError(FormatErrors(result.Errors));
+                return;
+            }
+
+            message = targetUser.LockoutEnd.HasValue ? "Đã khóa tài khoản." : "Đã mở khóa tài khoản.";
+            isError = false;
+            await WriteAuditAsync(targetUser.LockoutEnd.HasValue ? "Khóa tài khoản" : "Mở khóa tài khoản", "Tài khoản", targetUser.Id, $"{message} {targetUser.UserName}.");
+            await LoadAccountsAsync();
+        }
+        catch (Exception ex)
         {
-            ShowError(FormatErrors(result.Errors));
-            return;
+            ShowError($"Không thể thay đổi trạng thái tài khoản: {ex.Message}");
+            Console.Error.WriteLine($"AccountManagement ToggleLockAsync error: {ex}");
         }
-
-        message = user.LockoutEnd.HasValue ? "Đã khóa tài khoản." : "Đã mở khóa tài khoản.";
-        isError = false;
-        await WriteAuditAsync(user.LockoutEnd.HasValue ? "Khóa tài khoản" : "Mở khóa tài khoản", "Tài khoản", user.Id, $"{message} {user.UserName}.");
-        await LoadAccountsAsync();
     }
 
     private async Task DeleteAsync(ApplicationUser user)
     {
-        if (user.Id == currentUserId)
+        try
         {
-            ShowError("Bạn không thể tự xóa tài khoản đang đăng nhập.");
-            return;
-        }
+            if (user.Id == currentUserId)
+            {
+                ShowError("Bạn không thể tự xóa tài khoản đang đăng nhập.");
+                return;
+            }
 
-        var userRoles = await UserManager.GetRolesAsync(user);
-        if (userRoles.Contains("Admin") && await UserManager.GetUsersInRoleAsync("Admin") is { Count: <= 1 })
+            using var scope = ScopeFactory.CreateScope();
+            var scopedUserManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var targetUser = await scopedUserManager.FindByIdAsync(user.Id);
+            if (targetUser is null)
+            {
+                ShowError("Không tìm thấy tài khoản cần xóa.");
+                return;
+            }
+
+            var userRoles = await scopedUserManager.GetRolesAsync(targetUser);
+            if (userRoles.Contains("Admin") && await scopedUserManager.GetUsersInRoleAsync("Admin") is { Count: <= 1 })
+            {
+                ShowError("Không thể xóa Admin cuối cùng trong hệ thống.");
+                return;
+            }
+
+            var result = await scopedUserManager.DeleteAsync(targetUser);
+            if (!result.Succeeded)
+            {
+                ShowError(FormatErrors(result.Errors));
+                return;
+            }
+
+            message = "Đã xóa tài khoản.";
+            isError = false;
+            await WriteAuditAsync("Xóa", "Tài khoản", targetUser.Id, $"Xóa tài khoản {targetUser.UserName}.");
+            await LoadAccountsAsync();
+        }
+        catch (Exception ex)
         {
-            ShowError("Không thể xóa Admin cuối cùng trong hệ thống.");
-            return;
+            ShowError($"Không thể xóa tài khoản: {ex.Message}");
+            Console.Error.WriteLine($"AccountManagement DeleteAsync error: {ex}");
         }
-
-        var result = await UserManager.DeleteAsync(user);
-        if (!result.Succeeded)
-        {
-            ShowError(FormatErrors(result.Errors));
-            return;
-        }
-
-        message = "Đã xóa tài khoản.";
-        isError = false;
-        await WriteAuditAsync("Xóa", "Tài khoản", user.Id, $"Xóa tài khoản {user.UserName}.");
-        await LoadAccountsAsync();
     }
 
     private async Task WriteAuditAsync(string action, string objectType, string? objectId, string description, string? oldData = null, string? newData = null)

@@ -21,6 +21,8 @@ public class CoffeeShopDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<HoaDonKhuyenMai> HoaDonKhuyenMais { get; set; }
     public DbSet<DatBan> DatBans { get; set; }
     public DbSet<NhatKyHoatDong> NhatKyHoatDongs { get; set; }
+    public DbSet<CaLamViec> CaLamViecs { get; set; }
+    public DbSet<DangKyCa> DangKyCas { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -92,6 +94,22 @@ public class CoffeeShopDbContext : IdentityDbContext<ApplicationUser>
             .WithMany(b => b.DatBans)
             .HasForeignKey(d => d.MaBan)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<DangKyCa>()
+            .HasOne(d => d.CaLamViec)
+            .WithMany(c => c.DangKyCas)
+            .HasForeignKey(d => d.MaCa)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<DangKyCa>()
+            .HasOne(d => d.NhanVien)
+            .WithMany()
+            .HasForeignKey(d => d.MaNV)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<DangKyCa>()
+            .HasIndex(d => new { d.MaCa, d.MaNV })
+            .IsUnique();
 
         modelBuilder.Entity<DatBan>()
             .HasOne(d => d.KhachHang)

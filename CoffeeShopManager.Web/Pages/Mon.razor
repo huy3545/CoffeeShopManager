@@ -1,11 +1,14 @@
 @page "/mon"
-@attribute [Authorize(Roles = "Admin,Manager")]
+@attribute [Authorize(Roles = "Admin,Manager,Staff")]
+@using Microsoft.AspNetCore.Components.Forms
 @inject IMonService MonService
 @inject IJSRuntime JSRuntime
+@inject IWebHostEnvironment WebHostEnvironment
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>Quản lý món</PageTitle>
 
-<h2>☕ Quản lý món</h2>
+<h2><i class="bi bi-cup-hot-fill"></i> Quản lý món</h2>
 
 @if (!string.IsNullOrEmpty(errorMessage))
 {
@@ -18,14 +21,17 @@
 @if (!string.IsNullOrEmpty(successMessage))
 {
     <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <strong>✅ Thành công!</strong> @successMessage
+        <strong><i class="bi bi-check-circle-fill"></i> Thành công!</strong> @successMessage
         <button type="button" class="btn-close" @onclick="@(() => successMessage = string.Empty)"></button>
     </div>
 }
 
-<button class="btn btn-primary mb-3" @onclick="ShowAddModal">
-    + Thêm món mới
-</button>
+@if (canManage)
+{
+    <button class="btn btn-primary mb-3" @onclick="ShowAddModal">
+        + Thêm món mới
+    </button>
+}
 
 @if (mons == null)
 {
@@ -38,10 +44,14 @@ else
             <thead>
                 <tr>
                     <th>Mã món</th>
+                    <th>Hình ảnh</th>
                     <th>Tên món</th>
                     <th>Đơn giá</th>
                     <th>Loại</th>
-                    <th>Thao tác</th>
+                    @if (canManage)
+                    {
+                        <th>Thao tác</th>
+                    }
                 </tr>
             </thead>
             <tbody>
@@ -49,13 +59,26 @@ else
                 {
                     <tr>
                         <td><strong>#@mon.MaMon</strong></td>
+                        <td>
+                            @if (!string.IsNullOrWhiteSpace(GetMenuImage(mon)))
+                            {
+                                <img class="menu-item-image" src="@GetMenuImage(mon)" alt="@mon.TenMon" />
+                            }
+                            else
+                            {
+                                <span class="menu-item-image-placeholder"><i class="bi bi-cup-hot"></i></span>
+                            }
+                        </td>
                         <td>@mon.TenMon</td>
                         <td><strong class="text-success">@mon.DonGia.ToString("N0") ₫</strong></td>
                         <td><span class="badge bg-info">@mon.Loai</span></td>
-                        <td>
-                            <button class="btn btn-sm btn-warning" @onclick="() => ShowEditModal(mon)">Sửa</button>
-                            <button class="btn btn-sm btn-danger" @onclick="() => DeleteMon(mon.MaMon)">Xóa</button>
-                        </td>
+                        @if (canManage)
+                        {
+                            <td>
+                                <button class="btn btn-sm btn-warning" @onclick="() => ShowEditModal(mon)">Sửa</button>
+                                <button class="btn btn-sm btn-danger" @onclick="() => DeleteMon(mon.MaMon)">Xóa</button>
+                            </td>
+                        }
                     </tr>
                 }
             </tbody>
@@ -93,6 +116,22 @@ else
                             <option value="Khác">Khác</option>
                         </select>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label">Hình ảnh món</label>
+                        <InputFile class="form-control" OnChange="OnImageSelected" accept="image/png,image/jpeg,image/webp,image/gif" />
+                        <small class="text-muted">Định dạng PNG, JPG, WEBP hoặc GIF, tối đa 5 MB.</small>
+                        @if (!string.IsNullOrWhiteSpace(formImageUrl))
+                        {
+                            <div class="menu-image-preview mt-2">
+                                <img src="@formImageUrl" alt="Ảnh món hiện tại" />
+                                <span>Ảnh hiện tại</span>
+                            </div>
+                        }
+                        @if (selectedImage != null)
+                        {
+                            <div class="small text-success mt-2"><i class="bi bi-check-circle"></i> @selectedImage.Name</div>
+                        }
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @onclick="CloseModal">Hủy</button>
@@ -117,9 +156,14 @@ else
     private string formTenMon = string.Empty;
     private decimal formDonGia = 0;
     private string formLoai = "Cà phê";
+    private bool canManage;
+    private string? formImageUrl;
+    private IBrowserFile? selectedImage;
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        canManage = authState.User.IsInRole("Admin") || authState.User.IsInRole("Manager");
         await LoadMons();
     }
 
@@ -143,6 +187,8 @@ else
         formTenMon = string.Empty;
         formDonGia = 0;
         formLoai = "Cà phê";
+        formImageUrl = null;
+        selectedImage = null;
         showModal = true;
         errorMessage = string.Empty;
         successMessage = string.Empty;
@@ -155,6 +201,8 @@ else
         formTenMon = mon.TenMon;
         formDonGia = mon.DonGia;
         formLoai = mon.Loai;
+        formImageUrl = GetMenuImage(mon);
+        selectedImage = null;
         showModal = true;
         errorMessage = string.Empty;
         successMessage = string.Empty;
@@ -168,6 +216,33 @@ else
         formTenMon = string.Empty;
         formDonGia = 0;
         formLoai = "Cà phê";
+        formImageUrl = null;
+        selectedImage = null;
+    }
+
+    private void OnImageSelected(InputFileChangeEventArgs args)
+    {
+        selectedImage = args.File;
+        errorMessage = string.Empty;
+    }
+
+    private static string? GetMenuImage(MonDto mon)
+    {
+        if (!string.IsNullOrWhiteSpace(mon.HinhAnh))
+            return mon.HinhAnh;
+
+        return mon.TenMon.Trim().ToLowerInvariant() switch
+        {
+            "cà phê đen" => "images/mon/capheden.png",
+            "cà phê sữa" => "images/mon/caphesua.png",
+            "bạc xỉu" => "images/mon/bacxiu.png",
+            "cappuccino" => "images/mon/cappuchino.png",
+            "trà đào cam sả" => "images/mon/tradamcamsa.png",
+            "trà sữa trân châu" => "images/mon/trasuatranchau.png",
+            "nước cam ép" => "images/mon/nuoccamep.png",
+            "sinh tố bơ" => "images/mon/sinhtobo.png",
+            _ => null
+        };
     }
 
     private async Task SaveMon()
@@ -186,6 +261,12 @@ else
                 return;
             }
 
+            var imageUrl = formImageUrl;
+            if (selectedImage != null)
+            {
+                imageUrl = await SaveImageAsync(selectedImage);
+            }
+
             if (isEditMode && editingMonId.HasValue)
             {
                 // Update
@@ -193,7 +274,8 @@ else
                 {
                     TenMon = formTenMon,
                     DonGia = formDonGia,
-                    Loai = formLoai
+                    Loai = formLoai,
+                    HinhAnh = imageUrl
                 };
                 await MonService.UpdateMonAsync(editingMonId.Value, updateDto);
                 successMessage = $"Đã cập nhật món {formTenMon} thành công!";
@@ -205,7 +287,8 @@ else
                 {
                     TenMon = formTenMon,
                     DonGia = formDonGia,
-                    Loai = formLoai
+                    Loai = formLoai,
+                    HinhAnh = imageUrl
                 };
                 await MonService.CreateMonAsync(createDto);
                 successMessage = $"Đã thêm món {formTenMon} thành công!";
@@ -218,6 +301,28 @@ else
         {
             errorMessage = $"Lỗi khi lưu món: {ex.Message}";
         }
+    }
+
+    private async Task<string> SaveImageAsync(IBrowserFile image)
+    {
+        var allowedExtensions = new[] { ".png", ".jpg", ".jpeg", ".webp", ".gif" };
+        var extension = Path.GetExtension(image.Name).ToLowerInvariant();
+        if (!allowedExtensions.Contains(extension))
+            throw new InvalidOperationException("Ảnh phải có định dạng PNG, JPG, WEBP hoặc GIF.");
+
+        const long maxFileSize = 5 * 1024 * 1024;
+        if (image.Size > maxFileSize)
+            throw new InvalidOperationException("Kích thước ảnh không được vượt quá 5 MB.");
+
+        var imageDirectory = Path.Combine(WebHostEnvironment.WebRootPath, "images", "mon");
+        Directory.CreateDirectory(imageDirectory);
+        var fileName = $"mon-{Guid.NewGuid():N}{extension}";
+        var filePath = Path.Combine(imageDirectory, fileName);
+
+        await using var source = image.OpenReadStream(maxFileSize);
+        await using var target = File.Create(filePath);
+        await source.CopyToAsync(target);
+        return $"images/mon/{fileName}";
     }
 
     private async Task DeleteMon(int maMon)

@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@inject NavigationManager NavigationManager
 
 <div class="page">
     <div class="sidebar">
@@ -7,8 +8,58 @@
 
     <main>
         <article class="content px-4">
+            @if (ShowSharedBanner)
+            {
+                <section class="shared-page-banner" aria-label="Coffee Shop Manager">
+                    <img src="images/coffee-hero.png?v=20260920-0941" alt="Coffee Shop Manager" />
+                    <div class="shared-page-banner-content">
+                        <small>COFFEE SHOP MANAGER</small>
+                        <h1>@SharedBannerTitle</h1>
+                    </div>
+                </section>
+            }
             @Body
         </article>
     </main>
 </div>
 
+@code {
+    private bool ShowSharedBanner
+    {
+        get
+        {
+            var path = NavigationManager.ToBaseRelativePath(NavigationManager.Uri)
+                .Split('?', '#')[0]
+                .Trim('/')
+                .ToLowerInvariant();
+
+            return path is not ("" or "ban" or "login" or "accessdenied");
+        }
+    }
+
+    private string SharedBannerTitle
+    {
+        get
+        {
+            var path = NavigationManager.ToBaseRelativePath(NavigationManager.Uri)
+                .Split('?', '#')[0]
+                .Trim('/')
+                .ToLowerInvariant();
+
+            return path switch
+            {
+                "mon" => "Quản lý món",
+                "goimon" => "Gọi món",
+                "hoadon" => "Hóa đơn",
+                "khuyenmai" => "Khuyến mãi",
+                "thongke" => "Thống kê",
+                "nhanvien" => "Nhân viên",
+                "khachhang" => "Khách hàng",
+                "lich-lam-viec" => "Lịch làm việc và đăng ký ca",
+                "account-management" => "Quản lý tài khoản",
+                "nhat-ky-hoat-dong" => "Nhật ký thao tác",
+                _ => "Coffee Shop Manager"
+            };
+        }
+    }
+}

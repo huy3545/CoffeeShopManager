@@ -1,84 +1,75 @@
 @page "/"
 @attribute [Authorize]
+@using CoffeeShopManager.BLL.DTOs
+@using CoffeeShopManager.BLL.Services
+@inject IBanService BanService
+@inject IMonService MonService
+@inject IThongKeService ThongKeService
 
-<PageTitle>Trang chủ - Quản lý quán coffee</PageTitle>
+<PageTitle>Trang chủ - Coffee Shop Manager</PageTitle>
 
-<div class="text-center mb-4">
-    <h1 style="font-size: 2.5rem; color: var(--coffee-dark);">☕ Coffee Shop Manager</h1>
-    <p style="font-size: 1.1rem; color: #666;">Hệ thống quản lý quán coffee chuyên nghiệp</p>
-</div>
+@if (loading)
+{
+    <div class="dashboard-loading"><span class="spinner-border spinner-border-sm"></span> Đang tải tổng quan...</div>
+}
+else
+{
+    <div class="dashboard-topbar">
+        <div class="dashboard-search"><i class="bi bi-search"></i><span>Tìm món, bàn, hóa đơn...</span></div>
+    </div>
 
-<div class="row g-4 mb-5">
-    <div class="col-md-6 col-lg-3">
-        <div class="card text-white bg-primary mb-3 h-100">
-            <div class="card-body text-center">
-                <div style="font-size: 3rem; margin-bottom: 1rem;">🪑</div>
-                <h5 class="card-title" style="font-size: 1.3rem; font-weight: 600;">Quản lý bàn</h5>
-                <p class="card-text" style="opacity: 0.9;">Xem và quản lý trạng thái các bàn</p>
-                <a href="/ban" class="btn btn-light mt-3" style="font-weight: 600;">Đi đến →</a>
-            </div>
+    <section class="dashboard-hero">
+        <img class="dashboard-hero-image" src="images/coffee-hero.png?v=20260920-0941" alt="Không gian Coffee Shop" />
+        <div class="dashboard-hero-content">
+            <h1>Coffee Shop Manager</h1>
+            <h5>Quản lý dễ dàng - Vận hành hiệu quả - Hương vị lan tỏa</h5>
+            <a class="dashboard-hero-button" href="/goimon"><i class="bi bi-cup-hot-fill"></i> Bắt đầu làm việc</a>
+            <em>Một tách cà phê - Ngàn trải nghiệm tuyệt vời!</em>
         </div>
-    </div>
-    <div class="col-md-6 col-lg-3">
-        <div class="card text-white bg-success mb-3 h-100">
-            <div class="card-body text-center">
-                <div style="font-size: 3rem; margin-bottom: 1rem;">📋</div>
-                <h5 class="card-title" style="font-size: 1.3rem; font-weight: 600;">Gọi món</h5>
-                <p class="card-text" style="opacity: 0.9;">Tạo hóa đơn và gọi món cho khách</p>
-                <a href="/goimon" class="btn btn-light mt-3" style="font-weight: 600;">Đi đến →</a>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6 col-lg-3">
-        <div class="card text-white bg-warning mb-3 h-100">
-            <div class="card-body text-center">
-                <div style="font-size: 3rem; margin-bottom: 1rem;">💳</div>
-                <h5 class="card-title" style="font-size: 1.3rem; font-weight: 600;">Hóa đơn</h5>
-                <p class="card-text" style="opacity: 0.9;">Quản lý và thanh toán hóa đơn</p>
-                <a href="/hoadon" class="btn btn-light mt-3" style="font-weight: 600;">Đi đến →</a>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6 col-lg-3">
-        <div class="card text-white bg-info mb-3 h-100">
-            <div class="card-body text-center">
-                <div style="font-size: 3rem; margin-bottom: 1rem;">📊</div>
-                <h5 class="card-title" style="font-size: 1.3rem; font-weight: 600;">Thống kê</h5>
-                <p class="card-text" style="opacity: 0.9;">Xem báo cáo doanh thu</p>
-                <a href="/thongke" class="btn btn-light mt-3" style="font-weight: 600;">Đi đến →</a>
-            </div>
-        </div>
-    </div>
-</div>
+    </section>
 
-<div class="row">
-    <div class="col-lg-6 mb-4">
-        <div class="card shadow-coffee">
-            <div class="card-body">
-                <h3 class="text-coffee" style="font-weight: 600;">🎯 Hướng dẫn sử dụng</h3>
-                <ul class="list-unstyled mt-4" style="line-height: 2.5;">
-                    <li><span class="badge bg-primary">1</span> <strong>Quản lý bàn:</strong> Thêm, sửa, xóa thông tin bàn</li>
-                    <li><span class="badge bg-success">2</span> <strong>Quản lý món:</strong> Thêm, sửa, xóa món trong menu</li>
-                    <li><span class="badge bg-warning">3</span> <strong>Gọi món:</strong> Chọn bàn, tạo hóa đơn và thêm món</li>
-                    <li><span class="badge bg-danger">4</span> <strong>Thanh toán:</strong> Xem hóa đơn và thực hiện thanh toán</li>
-                    <li><span class="badge bg-info">5</span> <strong>Thống kê:</strong> Xem báo cáo doanh thu theo ngày/tháng</li>
-                </ul>
-            </div>
-        </div>
+    <div class="row g-3 dashboard-stat-row">
+        <div class="col-md-6 col-xl-3"><div class="dashboard-stat stat-orange"><i class="bi bi-grid-3x3-gap-fill"></i><div><strong>@activeTables</strong><span>Bàn đang phục vụ</span><a href="/ban">Xem chi tiết →</a></div></div></div>
+        <div class="col-md-6 col-xl-3"><div class="dashboard-stat stat-green"><i class="bi bi-people-fill"></i><div><strong>@menuCount</strong><span>Món trong menu</span><a href="/mon">Quản lý món →</a></div></div></div>
+        <div class="col-md-6 col-xl-3"><div class="dashboard-stat stat-purple"><i class="bi bi-receipt"></i><div><strong>@todayDashboard.SoHoaDon</strong><span>Hóa đơn hôm nay</span><a href="/hoadon">Xem hóa đơn →</a></div></div></div>
+        <div class="col-md-6 col-xl-3"><div class="dashboard-stat stat-red"><i class="bi bi-bar-chart-fill"></i><div><strong>@todayDashboard.TongDoanhThu.ToString("N0") ₫</strong><span>Doanh thu hôm nay</span><a href="/thongke">Xem thống kê →</a></div></div></div>
     </div>
-    <div class="col-lg-6 mb-4">
-        <div class="card shadow-coffee">
-            <div class="card-body">
-                <h3 class="text-coffee" style="font-weight: 600;">✨ Tính năng nổi bật</h3>
-                <ul class="list-unstyled mt-4" style="line-height: 2.5;">
-                    <li>✅ Quản lý bàn theo thời gian thực</li>
-                    <li>✅ Gọi món nhanh chóng, dễ dàng</li>
-                    <li>✅ Tích điểm khách hàng thân thiết</li>
-                    <li>✅ Thống kê doanh thu chi tiết</li>
-                    <li>✅ Xuất báo cáo Excel/PDF</li>
-                    <li>✅ Giao diện đẹp, thân thiện</li>
-                </ul>
-            </div>
-        </div>
+
+    <div class="row g-3 dashboard-lower">
+        <div class="col-xl-4"><div class="dashboard-panel h-100"><div class="dashboard-panel-title"><h3>Món bán chạy</h3><span>Hôm nay</span></div>
+            @if (!topProducts.Any()) { <p class="text-muted mb-0">Chưa có dữ liệu món bán chạy.</p> }
+            else { var rank = 1; @foreach (var item in topProducts.Take(5)) { var percent = topProducts.First().SoLuongBan == 0 ? 0 : Math.Clamp(item.SoLuongBan * 100 / topProducts.First().SoLuongBan, 8, 100); <div class="best-seller-row"><b>@rank</b><div class="best-seller-icon"><i class="bi bi-cup-hot-fill"></i></div><div class="best-seller-name"><strong>@item.TenMon</strong><small>@item.SoLuongBan ly</small></div><div class="best-seller-bar"><span style="width:@percent%"></span></div></div> rank++; } }
+        </div></div>
+        <div class="col-xl-5"><div class="dashboard-panel h-100"><div class="dashboard-panel-title"><h3>Doanh thu 7 ngày qua</h3><span>7 ngày qua</span></div><div class="revenue-bars">@foreach (var item in revenueWeek) { var height = maxRevenue == 0 ? 8 : Math.Max(8, (double)(item.TongDoanhThu / maxRevenue * 100)); <div class="revenue-bar-item"><div class="revenue-bar" style="height:@height%" title="@item.TongDoanhThu.ToString("N0") ₫"></div><small>@item.Ngay.ToString("dd/MM")</small></div> }</div><div class="dashboard-mini-stats"><div><i class="bi bi-arrow-up-right"></i><strong>+12%</strong><small>So với tuần trước</small></div><div><i class="bi bi-person-fill"></i><strong>@todayDashboard.SoHoaDon</strong><small>Hóa đơn hôm nay</small></div></div></div></div>
+        <div class="col-xl-3"><div class="dashboard-panel quick-actions"><h3>Thao tác nhanh</h3><a class="quick-action-primary" href="/goimon"><i class="bi bi-plus-lg"></i> Tạo hóa đơn mới</a><a href="/goimon"><i class="bi bi-cup-straw"></i> Gọi món cho bàn</a><a href="/ban"><i class="bi bi-grid-3x3-gap-fill"></i> Quản lý bàn</a><a href="/khuyenmai"><i class="bi bi-gift-fill"></i> Thêm khuyến mãi</a><img class="dashboard-quote-image" src="images/coffee-quote.png" alt="Life begins after coffee" /></div></div>
     </div>
-</div>
+}
+
+@code {
+    private bool loading = true;
+    private int activeTables;
+    private int menuCount;
+    private DashboardDoanhThuDto todayDashboard = new();
+    private List<MonBanChayDto> topProducts = new();
+    private List<DoanhThuTheoNgayDto> revenueWeek = new();
+    private decimal maxRevenue;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var today = DateTime.Today;
+            var weekStart = today.AddDays(-6);
+            var bans = await BanService.GetAllBansAsync();
+            activeTables = bans.Count(x => x.TrangThai == "Đang sử dụng");
+            menuCount = (await MonService.GetAllMonsAsync()).Count();
+            todayDashboard = await ThongKeService.GetDashboardAsync(today, today.AddDays(1).AddTicks(-1));
+            topProducts = todayDashboard.MonBanChay.ToList();
+            var weekDashboard = await ThongKeService.GetDashboardAsync(weekStart, today.AddDays(1).AddTicks(-1));
+            var values = weekDashboard.TheoNgay.ToDictionary(x => x.Ngay.Date, x => x);
+            revenueWeek = Enumerable.Range(0, 7).Select(i => values.TryGetValue(weekStart.AddDays(i), out var value) ? value : new DoanhThuTheoNgayDto { Ngay = weekStart.AddDays(i) }).ToList();
+            maxRevenue = revenueWeek.Max(x => x.TongDoanhThu);
+        }
+        finally { loading = false; }
+    }
+}

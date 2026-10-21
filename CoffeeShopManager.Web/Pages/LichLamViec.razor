@@ -1,0 +1,548 @@
+@page "/lich-lam-viec"
+@attribute [Authorize]
+@implements IDisposable
+@using Microsoft.EntityFrameworkCore
+@inject ILichLamViecService LichService
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject INhatKyHoatDongService AuditService
+@inject INhanVienService NhanVienService
+
+<PageTitle>Lịch làm việc và đăng ký ca</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h2><i class="bi bi-calendar3"></i> Lịch làm việc và đăng ký ca</h2>
+        <p class="text-muted mb-0">Nhân viên đăng ký ca, Manager duyệt ca, Admin quản lý toàn bộ lịch.</p>
+    </div>
+    @if (CanManage)
+    {
+        <button class="btn btn-primary" @onclick="BeginCreate">+ Tạo ca làm</button>
+    }
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="alert @(isError ? "alert-danger" : "alert-success") alert-dismissible" role="alert">
+        @message <button type="button" class="btn-close" @onclick="ClearMessage"></button>
+    </div>
+}
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body">
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <button class="btn @(viewMode == "all" ? "btn-primary" : "btn-outline-primary")" @onclick="SetAllAsync">Tất cả</button>
+            <button class="btn @(viewMode == "day" ? "btn-primary" : "btn-outline-primary")" @onclick="SetDayAsync">Hôm nay</button>
+            <button class="btn @(viewMode == "week" ? "btn-primary" : "btn-outline-primary")" @onclick="SetWeekAsync">Tuần này</button>
+            <button class="btn @(viewMode == "month" ? "btn-primary" : "btn-outline-primary")" @onclick="SetMonthAsync">Tháng này</button>
+            <label class="ms-md-3">Ngày xem:</label>
+            <InputDate class="form-control" style="max-width: 160px" @bind-Value="selectedDate" @bind-Value:after="ReloadAsync" />
+        </div>
+    </div>
+</div>
+
+@if (loading)
+{
+    <p><em>Đang tải lịch làm việc...</em></p>
+}
+else
+{
+    @if (shifts.Count == 0)
+    {
+        <div class="alert alert-info">Chưa có ca làm việc trong khoảng thời gian này. Bạn vẫn có thể xem bảng lịch và tạo ca mới.</div>
+    }
+
+    <div class="schedule-board card shadow-sm mb-4">
+        <div class="schedule-board-toolbar">
+            <div><strong>Lịch đăng ký ca làm</strong><small>Nhân viên đăng ký ca làm việc theo ngày</small></div>
+            <div class="schedule-legend">
+                <span><i class="schedule-dot shift-morning"></i> Ca sáng</span>
+                <span><i class="schedule-dot shift-afternoon"></i> Ca chiều</span>
+                <span><i class="schedule-dot shift-evening"></i> Ca tối</span>
+                <span><i class="schedule-dot shift-pending"></i> Chờ duyệt</span>
+            </div>
+        </div>
+        <div class="schedule-grid-wrap"><div class="schedule-grid">
+            <div class="schedule-corner">Nhân viên</div>
+            @foreach (var day in WeekDates)
+            {
+                <div class="schedule-day @(day.Date == DateTime.Today ? "schedule-today" : string.Empty) @(day.Date == selectedDate.Date ? "schedule-selected" : string.Empty)">
+                    <strong>@DayName(day)</strong><small>@day.ToString("dd/MM")</small>
+                </div>
+            }
+            @foreach (var employee in VisibleEmployees)
+            {
+                <div class="schedule-employee"><span class="employee-avatar">@Initials(employee.TenNV)</span><span><strong>@employee.TenNV</strong><small>@employee.LoaiNhanVien</small></span></div>
+                @foreach (var day in WeekDates)
+                {
+                    var assignments = GetAssignments(employee.MaNV, day).ToList();
+                    var availableShifts = GetAvailableShifts(employee, day).ToList();
+                    <div class="schedule-cell">
+                        @if (assignments.Count == 0)
+                        {
+                            @if (CanManage)
+                            {
+                                <div class="schedule-available-list">
+                                    @foreach (var availableShift in availableShifts)
+                                    {
+                                        <button class="shift-pill @ShiftClass(availableShift.LoaiCa) schedule-action-pill" title="Phân công @availableShift.TenCa" @onclick="() => AssignEmployeeAsync(employee, availableShift)">
+                                            <strong>@ShortShiftName(availableShift.LoaiCa)</strong>
+                                            <small>@availableShift.ThoiGianBatDau.ToString("HH:mm") - @availableShift.ThoiGianKetThuc.ToString("HH:mm")</small>
+                                            <em>Phân ca</em>
+                                        </button>
+                                    }
+                                    <button class="schedule-empty schedule-empty-button" title="Thêm ca mới" @onclick="() => BeginCreateFromDay(day)">+</button>
+                                </div>
+                            }
+                            else if (availableShifts.Count > 0)
+                            {
+                                <div class="schedule-available-list">
+                                    @foreach (var availableShift in availableShifts)
+                                    {
+                                        <button class="shift-pill @ShiftClass(availableShift.LoaiCa) schedule-action-pill" title="Đăng ký @availableShift.TenCa" @onclick="() => BeginRegister(availableShift)">
+                                            <strong>+ @ShortShiftName(availableShift.LoaiCa)</strong>
+                                            <small>@availableShift.ThoiGianBatDau.ToString("HH:mm") - @availableShift.ThoiGianKetThuc.ToString("HH:mm")</small>
+                                            <em>Đăng ký</em>
+                                        </button>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="schedule-empty">+</span>
+                            }
+                        }
+                        else
+                        {
+                            @foreach (var assignment in assignments)
+                            {
+                                <div class="shift-pill @ShiftClass(assignment.Shift.LoaiCa)" title="@assignment.Shift.TenCa">
+                                    <strong>@ShortShiftName(assignment.Shift.LoaiCa)</strong>
+                                    <small>@assignment.Shift.ThoiGianBatDau.ToString("HH:mm") - @assignment.Shift.ThoiGianKetThuc.ToString("HH:mm")</small>
+                                    @if (assignment.Registration.TrangThai == LichLamViecService.ChoDuyet) { <em>Chờ duyệt</em> }
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+            }
+        </div></div>
+        <div class="schedule-note"><strong><i class="bi bi-exclamation-triangle-fill"></i> Lưu ý</strong><span>• Mỗi nhân viên chỉ đăng ký tối đa một ca trong ngày.</span><span>• Ca màu xanh là sáng, cam là chiều, tím là tối.</span><span>• Liên hệ Manager/Admin nếu cần hỗ trợ.</span></div>
+        @if (!CanManage && currentEmployeeId.HasValue)
+        {
+            <div class="schedule-actions"><button type="button" class="btn btn-outline-secondary" @onclick="ReloadAsync">↻ Làm mới</button><button class="btn btn-primary" @onclick="BeginRegisterFromSelectedDate">✓ Đăng ký ca</button></div>
+        }
+    </div>
+
+    <div class="row g-3">
+        @foreach (var shift in shifts)
+        {
+            <div class="col-12 col-xl-6">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div><strong>@shift.TenCa</strong><br /><small>@shift.ThoiGianBatDau.ToString("dd/MM/yyyy HH:mm") - @shift.ThoiGianKetThuc.ToString("HH:mm")</small></div>
+                        <span class="badge @StatusClass(shift.TrangThai)">@shift.TrangThai</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <span class="badge text-bg-secondary me-1">@shift.LoaiCa</span>
+                            <span class="badge text-bg-info">@shift.LoaiNhanVien</span>
+                            <span class="ms-2">Đã duyệt: @shift.SoLuongDaDuyet/@shift.SoLuongNhanVienCan</span>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(shift.GhiChu))
+                        {
+                            <p class="text-muted mb-2">@shift.GhiChu</p>
+                        }
+
+                        @if (CanManage)
+                        {
+                            <div class="mb-2">
+                                <strong>Danh sách đăng ký</strong>
+                                @if (shift.DangKyCas.Count == 0)
+                                {
+                                    <div class="text-muted">Chưa có đăng ký.</div>
+                                }
+                                else
+                                {
+                                    @foreach (var registration in shift.DangKyCas)
+                                    {
+                                        <div class="border rounded p-2 mt-2 d-flex justify-content-between align-items-center">
+                                            <span>@registration.TenNhanVien <span class="badge @RegistrationClass(registration.TrangThai)">@registration.TrangThai</span></span>
+                                            @if (registration.TrangThai == LichLamViecService.ChoDuyet)
+                                            {
+                                                <span>
+                                                    <button class="btn btn-sm btn-success me-1" @onclick="() => ReviewAsync(registration, LichLamViecService.DaDuyet)">Duyệt</button>
+                                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => ReviewAsync(registration, LichLamViecService.TuChoi)">Từ chối</button>
+                                                </span>
+                                            }
+                                        </div>
+                                    }
+                                }
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => BeginEdit(shift)">Sửa</button>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteShiftAsync(shift)">Hủy</button>
+                        }
+                        else if (currentEmployeeId.HasValue)
+                        {
+                            var myRegistration = shift.DangKyCas.FirstOrDefault(x => x.MaNV == currentEmployeeId.Value);
+                            @if (myRegistration is null && shift.TrangThai == LichLamViecService.DangMo)
+                            {
+                                <button class="btn btn-success" @onclick="() => BeginRegister(shift)">Đăng ký ca</button>
+                            }
+                            else if (myRegistration is not null)
+                            {
+                                <span class="me-2">Trạng thái: <span class="badge @RegistrationClass(myRegistration.TrangThai)">@myRegistration.TrangThai</span></span>
+                                @if (myRegistration.TrangThai == LichLamViecService.ChoDuyet)
+                                {
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => CancelRegistrationAsync(myRegistration)">Hủy đăng ký</button>
+                                }
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@if (showShiftEditor)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal d-block" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title">@(editingShift is null ? "Tạo ca làm" : "Sửa ca làm")</h5><button class="btn-close" @onclick="CloseModals"></button></div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrWhiteSpace(editorError)) { <div class="alert alert-danger">@editorError</div> }
+                    <div class="row g-3">
+                        <div class="col-md-6"><label class="form-label">Tên ca</label><InputText class="form-control" @bind-Value="shiftForm.TenCa" /></div>
+                        <div class="col-md-6"><label class="form-label">Loại ca</label><InputSelect class="form-select" @bind-Value="shiftForm.LoaiCa" @bind-Value:after="ApplyShiftTypeDefaults"><option>Sáng</option><option>Chiều</option><option>Tối</option><option>Tùy chỉnh</option></InputSelect></div>
+                        <div class="col-md-6"><label class="form-label">Bắt đầu</label><button type="button" class="form-control custom-picker-trigger" @onclick="() => OpenDateTimePicker(true)">@shiftForm.ThoiGianBatDau.ToString("dd/MM/yyyy HH:mm")</button></div>
+                        <div class="col-md-6"><label class="form-label">Kết thúc</label><button type="button" class="form-control custom-picker-trigger" @onclick="() => OpenDateTimePicker(false)">@shiftForm.ThoiGianKetThuc.ToString("dd/MM/yyyy HH:mm")</button></div>
+                        <div class="col-md-6"><label class="form-label">Đối tượng nhân viên</label><InputSelect class="form-select" @bind-Value="shiftForm.LoaiNhanVien"><option>Part-time</option><option>Full-time</option></InputSelect></div>
+                        <div class="col-md-6"><label class="form-label">Số lượng cần</label><InputNumber class="form-control" @bind-Value="shiftForm.SoLuongNhanVienCan" /></div>
+                        <div class="col-12"><label class="form-label">Ghi chú</label><InputTextArea class="form-control" @bind-Value="shiftForm.GhiChu" /></div>
+                    </div>
+                </div>
+                <div class="modal-footer"><button class="btn btn-secondary" @onclick="CloseModals">Hủy</button><button class="btn btn-primary" @onclick="SaveShiftAsync">Lưu</button></div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showRegistrationEditor)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">Đăng ký ca: @registerShift?.TenCa</h5><button class="btn-close" @onclick="CloseModals"></button></div>
+            <div class="modal-body"><label class="form-label">Ghi chú hoặc thời gian có thể làm</label><InputTextArea class="form-control" @bind-Value="registrationNote" /></div>
+            <div class="modal-footer"><button class="btn btn-secondary" @onclick="CloseModals">Hủy</button><button class="btn btn-primary" @onclick="RegisterAsync">Gửi đăng ký</button></div>
+        </div></div>
+    </div>
+}
+
+@if (showDateTimePicker)
+{
+    <div class="custom-picker-backdrop" @onclick="CloseDateTimePicker"></div>
+    <div class="custom-date-time-picker">
+        <div class="picker-input-preview">@pickerValue.ToString("dd/MM/yyyy") <span>@pickerHour.ToString("00"):@pickerMinute.ToString("00")</span></div>
+        <div class="picker-content">
+            <div class="picker-calendar">
+                <div class="picker-month-bar"><button type="button" @onclick="PreviousPickerMonth">‹</button><strong>@pickerMonth.ToString("MMMM yyyy")</strong><button type="button" @onclick="NextPickerMonth">›</button></div>
+                <div class="picker-weekdays">@foreach (var weekday in new[] { "T2", "T3", "T4", "T5", "T6", "T7", "CN" }) { <span>@weekday</span> }</div>
+                <div class="picker-days">
+                    @foreach (var day in PickerCalendarDays)
+                    {
+                        <button type="button" class="@(day.Month == pickerMonth.Month ? "" : "picker-day-muted") @(day.Date == pickerValue.Date ? "picker-day-selected" : "")" @onclick="() => SelectPickerDay(day)">@day.Day</button>
+                    }
+                </div>
+            </div>
+            <div class="picker-time">
+                <strong>Thời gian</strong>
+                <label>Giờ</label><select @bind="pickerHour">@for (var hour = 0; hour < 24; hour++) { <option value="@hour">@hour.ToString("00")</option> }</select>
+                <label>Phút</label><select @bind="pickerMinute">@foreach (var minute in new[] { 0, 15, 30, 45 }) { <option value="@minute">@minute.ToString("00")</option> }</select>
+                <div class="picker-time-preview">@pickerHour.ToString("00"):@pickerMinute.ToString("00")</div>
+            </div>
+        </div>
+        <div class="picker-footer"><button type="button" class="btn btn-light btn-sm" @onclick="CloseDateTimePicker">Hủy</button><button type="button" class="btn btn-primary btn-sm" @onclick="ConfirmDateTimePicker">Xác nhận</button></div>
+    </div>
+}
+
+@code {
+    private readonly ShiftForm shiftForm = new();
+    private List<CaLamViecDto> shifts = new();
+    private List<NhanVienDto> employees = new();
+    private CaLamViecDto? editingShift;
+    private CaLamViecDto? registerShift;
+    private DateTime selectedDate = DateTime.Today;
+    private string viewMode = "week";
+    private string? message;
+    private string? editorError;
+    private string registrationNote = string.Empty;
+    private string? currentUserId;
+    private int? currentEmployeeId;
+    private bool isAdmin;
+    private bool isManager;
+    private bool loading;
+    private bool showShiftEditor;
+    private bool showRegistrationEditor;
+    private bool isError;
+    private Timer? scheduleRefreshTimer;
+    private bool showDateTimePicker;
+    private bool pickerForStart;
+    private DateTime pickerValue = DateTime.Today;
+    private DateTime pickerMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private int pickerHour;
+    private int pickerMinute;
+
+    private bool CanManage => isAdmin || isManager;
+    private IEnumerable<DateTime> PickerCalendarDays
+    {
+        get
+        {
+            var first = new DateTime(pickerMonth.Year, pickerMonth.Month, 1);
+            var mondayOffset = ((int)first.DayOfWeek + 6) % 7;
+            var start = first.AddDays(-mondayOffset);
+            return Enumerable.Range(0, 42).Select(index => start.AddDays(index));
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        currentUserId = UserManager.GetUserId(state.User);
+        isAdmin = state.User.IsInRole("Admin");
+        isManager = state.User.IsInRole("Manager");
+        var currentUser = await UserManager.GetUserAsync(state.User);
+        currentEmployeeId = currentUser?.MaNV;
+        employees = (await NhanVienService.GetAllNhanViensAsync()).ToList();
+        await ReloadAsync();
+        scheduleRefreshTimer = new Timer(_ => _ = InvokeAsync(async () =>
+        {
+            await ReloadAsync();
+            StateHasChanged();
+        }), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+    }
+
+    private async Task ReloadAsync()
+    {
+        loading = true;
+        try
+        {
+            var range = GetRange();
+            var result = await LichService.GetShiftsAsync(range.from, range.to);
+            // Ca đã kết thúc không còn hiển thị trên lịch hiện tại, nhưng vẫn được giữ trong database để tra cứu lịch sử.
+            shifts = result.Where(shift => shift.ThoiGianKetThuc > DateTime.Now).ToList();
+        }
+        catch (Exception ex) { ShowError($"Không thể tải lịch làm việc: {ex.Message}"); }
+        finally { loading = false; }
+    }
+
+    private (DateTime? from, DateTime? to) GetRange() => viewMode switch
+    {
+        "day" => (selectedDate.Date, selectedDate.Date),
+        "month" => (new DateTime(selectedDate.Year, selectedDate.Month, 1), new DateTime(selectedDate.Year, selectedDate.Month, 1).AddMonths(1).AddDays(-1)),
+        "all" => (null, null),
+        _ => (StartOfWeek(selectedDate), StartOfWeek(selectedDate).AddDays(6))
+    };
+
+    private async Task SetViewMode(string mode) { viewMode = mode; await ReloadAsync(); }
+    private Task SetAllAsync() => SetViewMode("all");
+    private Task SetDayAsync() => SetViewMode("day");
+    private Task SetWeekAsync() => SetViewMode("week");
+    private Task SetMonthAsync() => SetViewMode("month");
+
+    private IEnumerable<DateTime> WeekDates => Enumerable.Range(0, 7).Select(index => StartOfWeek(selectedDate).AddDays(index));
+    private IEnumerable<NhanVienDto> VisibleEmployees => CanManage ? employees : employees.Where(employee => employee.MaNV == currentEmployeeId);
+    private IEnumerable<AssignmentView> GetAssignments(int maNV, DateTime day) => shifts.Where(shift => shift.ThoiGianBatDau.Date == day.Date).SelectMany(shift => shift.DangKyCas.Where(registration => registration.MaNV == maNV && registration.TrangThai is LichLamViecService.ChoDuyet or LichLamViecService.DaDuyet).Select(registration => new AssignmentView(shift, registration)));
+    private IEnumerable<CaLamViecDto> GetAvailableShifts(NhanVienDto employee, DateTime day) => shifts.Where(shift => shift.ThoiGianBatDau.Date == day.Date && shift.TrangThai == LichLamViecService.DangMo && (CanManage ? shift.ThoiGianBatDau.Date >= DateTime.Today : shift.ThoiGianBatDau > DateTime.Now) && string.Equals(shift.LoaiNhanVien, employee.LoaiNhanVien, StringComparison.OrdinalIgnoreCase) && shift.DangKyCas.All(registration => registration.MaNV != employee.MaNV));
+    private static string DayName(DateTime date) => date.DayOfWeek switch { DayOfWeek.Monday => "T2", DayOfWeek.Tuesday => "T3", DayOfWeek.Wednesday => "T4", DayOfWeek.Thursday => "T5", DayOfWeek.Friday => "T6", DayOfWeek.Saturday => "T7", _ => "CN" };
+    private static string Initials(string name) => string.Join(string.Empty, name.Split(' ', StringSplitOptions.RemoveEmptyEntries).TakeLast(2).Select(x => x[0])).ToUpperInvariant();
+    private static string ShortShiftName(string type) => type switch { "Sáng" => "Sáng", "Chiều" => "Chiều", "Tối" => "Tối", _ => type };
+    private static string ShiftClass(string type) => type switch { "Sáng" => "shift-morning", "Chiều" => "shift-afternoon", "Tối" => "shift-evening", _ => "shift-custom" };
+    private bool HasOpenShift(DateTime day) => shifts.Any(shift => shift.ThoiGianBatDau.Date == day.Date && shift.TrangThai == LichLamViecService.DangMo && shift.ThoiGianBatDau > DateTime.Now && shift.DangKyCas.All(registration => registration.MaNV != currentEmployeeId));
+    private void BeginRegisterFromSelectedDate() => BeginRegisterFromDay(selectedDate);
+    private void BeginRegisterFromDay(DateTime day)
+    {
+        var openShift = shifts.FirstOrDefault(shift => shift.ThoiGianBatDau.Date == day.Date && shift.TrangThai == LichLamViecService.DangMo && shift.ThoiGianBatDau > DateTime.Now && shift.DangKyCas.All(registration => registration.MaNV != currentEmployeeId));
+        if (openShift is null) { ShowError("Ngày này chưa có ca phù hợp để đăng ký."); return; }
+        BeginRegister(openShift);
+    }
+
+    private void BeginCreate()
+    {
+        editingShift = null; editorError = null;
+        shiftForm.Reset(DateTime.Now.Date.AddDays(1).AddHours(8), DateTime.Now.Date.AddDays(1).AddHours(16));
+        showShiftEditor = true;
+    }
+
+    private void BeginCreateFromDay(DateTime day)
+    {
+        editingShift = null;
+        editorError = null;
+        shiftForm.Reset(day.Date.AddHours(8), day.Date.AddHours(16));
+        showShiftEditor = true;
+    }
+
+    private void ApplyShiftTypeDefaults()
+    {
+        var date = shiftForm.ThoiGianBatDau.Date;
+        switch (shiftForm.LoaiCa)
+        {
+            case "Sáng":
+                shiftForm.ThoiGianBatDau = date.AddHours(6);
+                shiftForm.ThoiGianKetThuc = date.AddHours(14);
+                break;
+            case "Chiều":
+                shiftForm.ThoiGianBatDau = date.AddHours(14);
+                shiftForm.ThoiGianKetThuc = date.AddHours(22);
+                break;
+            case "Tối":
+                shiftForm.ThoiGianBatDau = date.AddHours(22);
+                shiftForm.ThoiGianKetThuc = date.AddDays(1).AddHours(6);
+                break;
+        }
+    }
+
+    private void BeginEdit(CaLamViecDto shift)
+    {
+        editingShift = shift; editorError = null;
+        shiftForm.Load(shift); showShiftEditor = true;
+    }
+
+    private void OpenDateTimePicker(bool forStart)
+    {
+        pickerForStart = forStart;
+        pickerValue = forStart ? shiftForm.ThoiGianBatDau : shiftForm.ThoiGianKetThuc;
+        pickerMonth = new DateTime(pickerValue.Year, pickerValue.Month, 1);
+        pickerHour = pickerValue.Hour;
+        pickerMinute = pickerValue.Minute - (pickerValue.Minute % 15);
+        showDateTimePicker = true;
+    }
+
+    private void SelectPickerDay(DateTime day) => pickerValue = day;
+    private void PreviousPickerMonth() => pickerMonth = pickerMonth.AddMonths(-1);
+    private void NextPickerMonth() => pickerMonth = pickerMonth.AddMonths(1);
+    private void CloseDateTimePicker() => showDateTimePicker = false;
+    private void ConfirmDateTimePicker()
+    {
+        var value = pickerValue.Date.AddHours(pickerHour).AddMinutes(pickerMinute);
+        if (pickerForStart) shiftForm.ThoiGianBatDau = value;
+        else shiftForm.ThoiGianKetThuc = value;
+        showDateTimePicker = false;
+    }
+
+    private void BeginRegister(CaLamViecDto shift)
+    {
+        if (shift.TrangThai != LichLamViecService.DangMo)
+        {
+            ShowError("Ca làm này không còn mở đăng ký hoặc đã bị hủy.");
+            _ = ReloadAsync();
+            return;
+        }
+
+        if (shift.ThoiGianBatDau <= DateTime.Now)
+        {
+            ShowError("Ca làm này đã bắt đầu, không thể đăng ký.");
+            _ = ReloadAsync();
+            return;
+        }
+
+        registerShift = shift; registrationNote = string.Empty; showRegistrationEditor = true;
+    }
+
+    private async Task SaveShiftAsync()
+    {
+        try
+        {
+            editorError = null;
+            if (editingShift is null)
+            {
+                var created = await LichService.CreateShiftAsync(new CreateCaLamViecDto { TenCa = shiftForm.TenCa, ThoiGianBatDau = shiftForm.ThoiGianBatDau, ThoiGianKetThuc = shiftForm.ThoiGianKetThuc, LoaiCa = shiftForm.LoaiCa, LoaiNhanVien = shiftForm.LoaiNhanVien, SoLuongNhanVienCan = shiftForm.SoLuongNhanVienCan, NguoiTao = currentUserId, GhiChu = shiftForm.GhiChu });
+                await WriteAuditAsync("Tạo", "Ca làm", created.MaCa.ToString(), $"Tạo ca {created.TenCa}.");
+                ShowSuccess("Đã tạo ca làm.");
+            }
+            else
+            {
+                await LichService.UpdateShiftAsync(editingShift.MaCa, new UpdateCaLamViecDto { TenCa = shiftForm.TenCa, ThoiGianBatDau = shiftForm.ThoiGianBatDau, ThoiGianKetThuc = shiftForm.ThoiGianKetThuc, LoaiCa = shiftForm.LoaiCa, LoaiNhanVien = shiftForm.LoaiNhanVien, SoLuongNhanVienCan = shiftForm.SoLuongNhanVienCan, GhiChu = shiftForm.GhiChu });
+                await WriteAuditAsync("Sửa", "Ca làm", editingShift.MaCa.ToString(), $"Cập nhật ca {shiftForm.TenCa}.");
+                ShowSuccess("Đã cập nhật ca làm.");
+            }
+            showShiftEditor = false; await ReloadAsync();
+        }
+        catch (Exception ex) { editorError = ex.Message; }
+    }
+
+    private async Task DeleteShiftAsync(CaLamViecDto shift)
+    {
+        try { await LichService.DeleteShiftAsync(shift.MaCa); await WriteAuditAsync("Xóa/Hủy", "Ca làm", shift.MaCa.ToString(), $"Xóa hoặc hủy ca {shift.TenCa}."); ShowSuccess("Đã xóa hoặc hủy ca làm."); await ReloadAsync(); }
+        catch (Exception ex) { ShowError(ex.Message); }
+    }
+
+    private async Task RegisterAsync()
+    {
+        try
+        {
+            if (!currentEmployeeId.HasValue) throw new InvalidOperationException("Tài khoản Staff chưa liên kết với nhân viên.");
+            if (registerShift is null) return;
+            var result = await LichService.RegisterAsync(new DangKyCaRequestDto { MaCa = registerShift.MaCa, MaNV = currentEmployeeId.Value, MaNguoiDung = currentUserId, GhiChu = registrationNote });
+            await WriteAuditAsync("Đăng ký", "Ca làm", result.MaDangKy.ToString(), $"Đăng ký ca {registerShift.TenCa}.");
+            showRegistrationEditor = false; ShowSuccess("Đã gửi đăng ký ca, chờ duyệt."); await ReloadAsync();
+        }
+        catch (Exception ex) { ShowError(ex.Message); }
+    }
+
+    private async Task AssignEmployeeAsync(NhanVienDto employee, CaLamViecDto shift)
+    {
+        try
+        {
+            var registration = await LichService.AssignAsync(new DangKyCaRequestDto { MaCa = shift.MaCa, MaNV = employee.MaNV, MaNguoiDung = currentUserId, GhiChu = "Được phân công trực tiếp bởi quản lý." }, currentUserId);
+            await WriteAuditAsync("Phân ca", "Đăng ký ca", registration.MaDangKy.ToString(), $"Phân công {employee.TenNV} vào ca {shift.TenCa}.");
+            ShowSuccess($"Đã phân công {employee.TenNV} vào ca {shift.TenCa}.");
+            await ReloadAsync();
+        }
+        catch (Exception ex) { ShowError(ex.Message); }
+    }
+
+    private async Task CancelRegistrationAsync(DangKyCaDto registration)
+    {
+        try { if (currentEmployeeId.HasValue) { await LichService.CancelRegistrationAsync(registration.MaDangKy, currentEmployeeId.Value); await WriteAuditAsync("Hủy đăng ký", "Ca làm", registration.MaDangKy.ToString(), "Hủy đăng ký ca."); ShowSuccess("Đã hủy đăng ký."); await ReloadAsync(); } }
+        catch (Exception ex) { ShowError(ex.Message); }
+    }
+
+    private async Task ReviewAsync(DangKyCaDto registration, string status)
+    {
+        try { await LichService.ReviewRegistrationAsync(registration.MaDangKy, status, currentUserId); await WriteAuditAsync(status == LichLamViecService.DaDuyet ? "Duyệt" : "Từ chối", "Đăng ký ca", registration.MaDangKy.ToString(), $"{status} đăng ký của {registration.TenNhanVien}."); ShowSuccess($"Đã {status.ToLowerInvariant()} đăng ký."); await ReloadAsync(); }
+        catch (Exception ex) { ShowError(ex.Message); }
+    }
+
+    private async Task WriteAuditAsync(string action, string objectType, string objectId, string description)
+    {
+        try { var state = await AuthenticationStateProvider.GetAuthenticationStateAsync(); await AuditService.GhiNhanAsync(new GhiNhatKyDto { MaNguoiDung = currentUserId, TenNguoiDung = state.User.Identity?.Name, HanhDong = action, LoaiDoiTuong = objectType, MaDoiTuong = objectId, MoTa = description }); } catch { }
+    }
+
+    private static DateTime StartOfWeek(DateTime date) => date.Date.AddDays(-(((int)date.DayOfWeek + 6) % 7));
+    private static string StatusClass(string status) => status switch { "Đang mở" => "text-bg-success", "Đã đủ người" => "text-bg-warning", "Đã hủy" => "text-bg-danger", _ => "text-bg-secondary" };
+    private static string RegistrationClass(string status) => status switch { "Đã duyệt" => "text-bg-success", "Từ chối" or "Đã hủy" => "text-bg-danger", _ => "text-bg-warning" };
+    private void CloseModals() { showShiftEditor = false; showRegistrationEditor = false; editorError = null; }
+    private void ClearMessage() => message = null;
+    private void ShowSuccess(string text) { message = text; isError = false; }
+    private void ShowError(string text) { message = text; isError = true; }
+    public void Dispose() => scheduleRefreshTimer?.Dispose();
+
+    private sealed class ShiftForm
+    {
+        public string TenCa { get; set; } = string.Empty;
+        public DateTime ThoiGianBatDau { get; set; } = DateTime.Now.AddDays(1);
+        public DateTime ThoiGianKetThuc { get; set; } = DateTime.Now.AddDays(1).AddHours(8);
+        public string LoaiCa { get; set; } = "Tùy chỉnh";
+        public string LoaiNhanVien { get; set; } = "Part-time";
+        public int SoLuongNhanVienCan { get; set; } = 1;
+        public string? GhiChu { get; set; }
+        public void Reset(DateTime start, DateTime end) { TenCa = string.Empty; ThoiGianBatDau = start; ThoiGianKetThuc = end; LoaiCa = "Tùy chỉnh"; LoaiNhanVien = "Part-time"; SoLuongNhanVienCan = 1; GhiChu = null; }
+        public void Load(CaLamViecDto x) { TenCa = x.TenCa; ThoiGianBatDau = x.ThoiGianBatDau; ThoiGianKetThuc = x.ThoiGianKetThuc; LoaiCa = x.LoaiCa; LoaiNhanVien = x.LoaiNhanVien; SoLuongNhanVienCan = x.SoLuongNhanVienCan; GhiChu = x.GhiChu; }
+    }
+
+    private sealed record AssignmentView(CaLamViecDto Shift, DangKyCaDto Registration);
+}

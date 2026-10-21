@@ -6,6 +6,7 @@ public class MonDto
     public string TenMon { get; set; } = string.Empty;
     public decimal DonGia { get; set; }
     public string Loai { get; set; } = string.Empty;
+    public string? HinhAnh { get; set; }
 }
 
 public class CreateMonDto
@@ -13,6 +14,7 @@ public class CreateMonDto
     public string TenMon { get; set; } = string.Empty;
     public decimal DonGia { get; set; }
     public string Loai { get; set; } = string.Empty;
+    public string? HinhAnh { get; set; }
 }
 
 public class UpdateMonDto
@@ -20,5 +22,5 @@ public class UpdateMonDto
     public string? TenMon { get; set; }
     public decimal? DonGia { get; set; }
     public string? Loai { get; set; }
+    public string? HinhAnh { get; set; }
 }
-

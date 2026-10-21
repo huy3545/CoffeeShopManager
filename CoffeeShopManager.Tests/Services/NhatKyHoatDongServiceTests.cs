@@ -39,4 +39,19 @@ public class NhatKyHoatDongServiceTests
             MoTa = "Mô tả"
         }));
     }
+
+    [Fact]
+    public async Task CleanupExpiredAsync_UsesThirtyDayCutoffAndReturnsDeletedCount()
+    {
+        var repository = new Mock<INhatKyHoatDongRepository>();
+        repository.Setup(x => x.DeleteOlderThanAsync(It.IsAny<DateTime>()))
+            .ReturnsAsync(3);
+        var service = new NhatKyHoatDongService(repository.Object);
+        var now = new DateTime(2026, 9, 18, 12, 0, 0);
+
+        var result = await service.CleanupExpiredAsync(now);
+
+        Assert.Equal(3, result);
+        repository.Verify(x => x.DeleteOlderThanAsync(now.AddDays(-30)), Times.Once);
+    }
 }

@@ -17,6 +17,9 @@ public class NhanVien
     [MaxLength(100)]
     public string CaLam { get; set; } = string.Empty; // Sáng, Chiều, Tối
 
+    [Required, MaxLength(20)]
+    public string LoaiNhanVien { get; set; } = "Part-time";
+
     [MaxLength(15)]
     public string? SoDienThoai { get; set; }
 
@@ -26,4 +29,3 @@ public class NhanVien
     // Navigation properties
     public virtual ICollection<HoaDon> HoaDons { get; set; } = new List<HoaDon>();
 }
-

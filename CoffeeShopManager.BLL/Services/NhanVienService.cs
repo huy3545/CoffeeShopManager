@@ -67,10 +67,13 @@ public class NhanVienService : INhanVienService
             if (string.IsNullOrWhiteSpace(createDto.CaLam))
                 throw new ArgumentException("Ca làm không được để trống");
 
+            ValidateLoaiNhanVien(createDto.LoaiNhanVien);
+
             var nhanVien = new NhanVien
             {
                 TenNV = createDto.TenNV.Trim(),
                 CaLam = createDto.CaLam.Trim(),
+                LoaiNhanVien = createDto.LoaiNhanVien.Trim(),
                 SoDienThoai = createDto.SoDienThoai?.Trim(),
                 Email = createDto.Email?.Trim()
             };
@@ -105,6 +108,9 @@ public class NhanVienService : INhanVienService
 
             if (!string.IsNullOrWhiteSpace(updateDto.CaLam))
                 nhanVien.CaLam = updateDto.CaLam.Trim();
+
+            ValidateLoaiNhanVien(updateDto.LoaiNhanVien);
+            nhanVien.LoaiNhanVien = updateDto.LoaiNhanVien.Trim();
 
             if (updateDto.SoDienThoai != null)
                 nhanVien.SoDienThoai = updateDto.SoDienThoai.Trim();
@@ -183,9 +189,15 @@ public class NhanVienService : INhanVienService
             MaNV = nhanVien.MaNV,
             TenNV = nhanVien.TenNV,
             CaLam = nhanVien.CaLam,
+            LoaiNhanVien = nhanVien.LoaiNhanVien,
             SoDienThoai = nhanVien.SoDienThoai,
             Email = nhanVien.Email
         };
     }
-}
 
+    private static void ValidateLoaiNhanVien(string loaiNhanVien)
+    {
+        if (loaiNhanVien is not ("Part-time" or "Full-time"))
+            throw new ArgumentException("Loại nhân viên phải là Part-time hoặc Full-time");
+    }
+}

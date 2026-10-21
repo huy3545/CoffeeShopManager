@@ -8,6 +8,8 @@ public interface INhatKyHoatDongService
 {
     Task<IEnumerable<NhatKyHoatDongDto>> SearchAsync(string? searchText = null, string? action = null, DateTime? from = null, DateTime? to = null);
     Task<NhatKyHoatDongDto> GhiNhanAsync(GhiNhatKyDto dto);
+    Task<int> CleanupExpiredAsync(DateTime? now = null);
+    Task<int> DeleteAllAsync();
 }
 
 public class NhatKyHoatDongService : INhatKyHoatDongService
@@ -42,6 +44,14 @@ public class NhatKyHoatDongService : INhatKyHoatDongService
         });
         return Map(entity);
     }
+
+    public Task<int> CleanupExpiredAsync(DateTime? now = null)
+    {
+        var cutoff = (now ?? DateTime.Now).AddDays(-30);
+        return _repository.DeleteOlderThanAsync(cutoff);
+    }
+
+    public Task<int> DeleteAllAsync() => _repository.DeleteAllAsync();
 
     private static NhatKyHoatDongDto Map(NhatKyHoatDong x) => new()
     {

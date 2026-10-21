@@ -74,7 +74,8 @@ public class MonService : IMonService
             {
                 TenMon = createDto.TenMon.Trim(),
                 DonGia = createDto.DonGia,
-                Loai = createDto.Loai.Trim()
+                Loai = createDto.Loai.Trim(),
+                HinhAnh = createDto.HinhAnh
             };
 
             var createdMon = await _monRepository.AddAsync(mon);
@@ -114,6 +115,9 @@ public class MonService : IMonService
 
             if (!string.IsNullOrWhiteSpace(updateDto.Loai))
                 mon.Loai = updateDto.Loai.Trim();
+
+            if (updateDto.HinhAnh != null)
+                mon.HinhAnh = updateDto.HinhAnh;
 
             await _monRepository.UpdateAsync(mon);
             return MapToDto(mon);
@@ -186,8 +190,8 @@ public class MonService : IMonService
             MaMon = mon.MaMon,
             TenMon = mon.TenMon,
             DonGia = mon.DonGia,
-            Loai = mon.Loai
+            Loai = mon.Loai,
+            HinhAnh = mon.HinhAnh
         };
     }
 }
-

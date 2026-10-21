@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using System.IO;
 using System.Linq;
+using CoffeeShopManager.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,7 +21,11 @@ builder.Logging.AddConsole();
 
 // Add services to the container
 builder.Services.AddRazorPages();
-builder.Services.AddServerSideBlazor();
+builder.Services.AddServerSideBlazor(options =>
+{
+    // Chỉ hiển thị chi tiết exception khi chạy local Development.
+    options.DetailedErrors = builder.Environment.IsDevelopment();
+});
 
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
 {
@@ -183,6 +188,8 @@ builder.Services.AddScoped<IKhuyenMaiRepository, KhuyenMaiRepository>();
 builder.Services.AddScoped<IHoaDonKhuyenMaiRepository, HoaDonKhuyenMaiRepository>();
 builder.Services.AddScoped<IDatBanRepository, DatBanRepository>();
 builder.Services.AddScoped<INhatKyHoatDongRepository, NhatKyHoatDongRepository>();
+builder.Services.AddScoped<ILichLamViecRepository, LichLamViecRepository>();
+builder.Services.AddScoped<IDangKyCaRepository, DangKyCaRepository>();
 
 // Add Services
 builder.Services.AddScoped<IBanService, BanService>();
@@ -195,6 +202,8 @@ builder.Services.AddScoped<IExportService, ExportService>();
 builder.Services.AddScoped<IKhuyenMaiService, KhuyenMaiService>();
 builder.Services.AddScoped<IDatBanService, DatBanService>();
 builder.Services.AddScoped<INhatKyHoatDongService, NhatKyHoatDongService>();
+builder.Services.AddScoped<ILichLamViecService, LichLamViecService>();
+builder.Services.AddHostedService<NhatKyCleanupHostedService>();
 
 // Add HttpClient for API calls
 builder.Services.AddHttpClient();

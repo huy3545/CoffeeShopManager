@@ -21,7 +21,9 @@ public class Mon
     [MaxLength(100)]
     public string Loai { get; set; } = string.Empty; // Cà phê, Trà, Nước ép, Đồ ăn nhẹ, etc.
 
+    [MaxLength(500)]
+    public string? HinhAnh { get; set; }
+
     // Navigation properties
     public virtual ICollection<ChiTietHD> ChiTietHDs { get; set; } = new List<ChiTietHD>();
 }
-

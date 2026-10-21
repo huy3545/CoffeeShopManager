@@ -8,12 +8,17 @@
 
 <PageTitle>Quản lý bàn</PageTitle>
 
-<h2>🪑 Quản lý bàn</h2>
+<div class="ban-page-header">
+    <div>
+        <h2><i class="bi bi-grid-3x3-gap-fill"></i> Quản lý bàn</h2>
+        <p>Sắp xếp và theo dõi trạng thái bàn một cách dễ dàng.</p>
+    </div>
+</div>
 
 @if (!string.IsNullOrEmpty(errorMessage))
 {
     <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <strong>❌ Lỗi!</strong> @errorMessage
+        <strong><i class="bi bi-exclamation-triangle-fill"></i> Lỗi!</strong> @errorMessage
         <button type="button" class="btn-close" @onclick="@(() => errorMessage = string.Empty)"></button>
     </div>
 }
@@ -21,28 +26,27 @@
 @if (!string.IsNullOrEmpty(successMessage))
 {
     <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <strong>✅ Thành công!</strong> @successMessage
+        <strong><i class="bi bi-check-circle-fill"></i> Thành công!</strong> @successMessage
         <button type="button" class="btn-close" @onclick="@(() => successMessage = string.Empty)"></button>
     </div>
 }
 
-@if (canManage)
-{
-    <button class="btn btn-primary mb-3" @onclick="ShowAddModal">
-        + Thêm bàn mới
-    </button>
-}
-<button class="btn btn-success mb-3 ms-2" @onclick="ShowBookingModal">
-    + Lịch đặt bàn
-</button>
-<button class="btn btn-outline-primary mb-3 ms-2" @onclick="ShowBookingHistory">
-    Xem lịch đặt bàn
-</button>
+<section class="ban-hero">
+    <img src="images/coffee-hero.png?v=20260920-0941" alt="Coffee Shop" />
+    <div><small><i class="bi bi-cup-hot-fill"></i> COFFEE SHOP MANAGER</small><h1>Quản lý bàn</h1><p>Sắp xếp và theo dõi trạng thái bàn một cách dễ dàng</p></div>
+</section>
 
-<div class="table-status-legend mb-3">
-    <span><i class="status-dot status-empty"></i> Trống</span>
-    <span><i class="status-dot status-using"></i> Đang sử dụng</span>
-    <span><i class="status-dot status-booked"></i> Đã đặt</span>
+<div class="ban-toolbar">
+    <div class="ban-status-filters">
+        <button class="@(statusFilter == "" ? "active" : "")" @onclick="@(() => SetStatusFilter(string.Empty))">Tất cả (@(bans?.Count ?? 0))</button>
+        <button class="@(statusFilter == "Trống" ? "active" : "")" @onclick="@(() => SetStatusFilter("Trống"))"><i class="status-dot status-empty"></i> Trống (@CountStatus("Trống"))</button>
+        <button class="@(statusFilter == "Đang sử dụng" ? "active" : "")" @onclick="@(() => SetStatusFilter("Đang sử dụng"))"><i class="status-dot status-using"></i> Đang sử dụng (@CountStatus("Đang sử dụng"))</button>
+        <button class="@(statusFilter == "Đã đặt" ? "active" : "")" @onclick="@(() => SetStatusFilter("Đã đặt"))"><i class="status-dot status-booked"></i> Đã đặt (@CountStatus("Đã đặt"))</button>
+    </div>
+    <div class="ban-actions">
+        <div class="ban-search"><i class="bi bi-search"></i><input @bind="tableSearch" @bind:event="oninput" placeholder="Tìm theo số bàn..." /></div>
+        @if (canManage) { <button class="btn btn-primary" @onclick="ShowAddModal"><i class="bi bi-plus-lg"></i> Thêm bàn mới</button> }
+    </div>
 </div>
 
 @if (bans == null)
@@ -51,8 +55,11 @@
 }
 else
 {
-    <div class="table-card-grid mb-4">
-        @foreach (var ban in bans)
+    <div class="row g-3 align-items-start">
+        <div class="col-xl-9">
+            <div class="ban-section-header"><div><h3><i class="bi bi-grid-3x3-gap-fill"></i> Sơ đồ bàn</h3><span>Nhấp vào bàn để xem chi tiết hoặc thực hiện thao tác.</span></div></div>
+            <div class="table-card-grid mb-4">
+        @foreach (var ban in FilteredBans)
         {
             <div class="table-card @GetTableCardStatusClass(ban.TrangThai)">
                 <div class="table-card-header">
@@ -60,7 +67,7 @@ else
                     <span class="badge @GetStatusClass(ban.TrangThai)">@ban.TrangThai</span>
                 </div>
                 <div class="table-visual @GetTableVisualClass(ban.TenBan)">
-                    <span>@GetTableIcon(ban.TenBan)</span>
+                    <img src="@GetTableImage(ban.TenBan)" alt="@ban.TenBan" />
                 </div>
                 <h5>@ban.TenBan</h5>
                 <div class="table-card-actions">
@@ -72,6 +79,12 @@ else
                 </div>
             </div>
         }
+            </div>
+        </div>
+        <div class="col-xl-3">
+            <div class="ban-summary"><h3><i class="bi bi-bar-chart-fill"></i> Thống kê bàn</h3><div class="ban-summary-grid"><div class="summary-empty"><strong>@CountStatus("Trống")</strong><span>Bàn trống</span></div><div class="summary-using"><strong>@CountStatus("Đang sử dụng")</strong><span>Đang sử dụng</span></div><div class="summary-booked"><strong>@CountStatus("Đã đặt")</strong><span>Đã đặt</span></div></div></div>
+            <div class="ban-summary ban-using-list"><h3><i class="bi bi-clock-fill"></i> Đang sử dụng</h3>@foreach (var ban in UsingBans.Take(4)) { <div class="using-row"><img src="@GetTableImage(ban.TenBan)" alt="@ban.TenBan" /><span><strong>@ban.TenBan</strong><small>Đang phục vụ</small></span><button @onclick="() => ShowEditModal(ban)">Xem</button></div> }</div>
+        </div>
     </div>
 
 }
@@ -275,6 +288,21 @@ else
     private string bookingNote = string.Empty;
     private string bookingSearch = string.Empty;
     private string bookingStatusFilter = string.Empty;
+    private string tableSearch = string.Empty;
+    private string statusFilter = string.Empty;
+
+    private IEnumerable<BanDto> FilteredBans => (bans ?? new List<BanDto>()).Where(b =>
+        (string.IsNullOrWhiteSpace(tableSearch) || b.TenBan.Contains(tableSearch, StringComparison.OrdinalIgnoreCase)) &&
+        (string.IsNullOrWhiteSpace(statusFilter) || b.TrangThai == statusFilter));
+
+    private IEnumerable<BanDto> UsingBans => (bans ?? new List<BanDto>()).Where(b => b.TrangThai == "Đang sử dụng");
+
+    private int CountStatus(string status) => (bans ?? new List<BanDto>()).Count(b => b.TrangThai == status);
+
+    private void SetStatusFilter(string status)
+    {
+        statusFilter = status;
+    }
 
     private IEnumerable<DatBanDto> FilteredBookings => (bookings ?? new List<DatBanDto>()).Where(b =>
         (string.IsNullOrWhiteSpace(bookingSearch)
@@ -329,9 +357,11 @@ else
             ? "table-visual-takeaway"
             : "table-visual-standard";
 
-    private static string GetTableIcon(string tenBan) => tenBan.Contains("VIP", StringComparison.OrdinalIgnoreCase)
-        ? "👑"
-        : tenBan.Equals("Mang về", StringComparison.OrdinalIgnoreCase) ? "🛍️" : "🪑";
+    private static string GetTableImage(string tenBan) => tenBan.Contains("VIP", StringComparison.OrdinalIgnoreCase)
+        ? "images/deskvip.png"
+        : tenBan.Equals("Mang về", StringComparison.OrdinalIgnoreCase)
+            ? "images/mangve.png"
+            : "images/desk.png";
 
     private void ShowAddModal()
     {

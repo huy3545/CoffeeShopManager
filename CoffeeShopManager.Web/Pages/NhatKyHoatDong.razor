@@ -1,15 +1,19 @@
 @page "/nhat-ky-hoat-dong"
 @attribute [Authorize(Roles = "Admin")]
 @inject INhatKyHoatDongService AuditService
+@inject IJSRuntime JS
 
 <PageTitle>Nhật ký thao tác người dùng</PageTitle>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-        <h2>📝 Nhật ký thao tác người dùng</h2>
+        <h2><i class="bi bi-journal-text"></i> Nhật ký thao tác người dùng</h2>
         <p class="text-muted mb-0">Theo dõi các thao tác quản trị để hỗ trợ kiểm tra và truy vết.</p>
     </div>
-    <button class="btn btn-outline-secondary" @onclick="LoadAsync">Làm mới</button>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-secondary" @onclick="LoadAsync">Làm mới</button>
+        <button class="btn btn-danger" @onclick="DeleteAllAsync">Xóa tất cả</button>
+    </div>
 </div>
 
 <div class="card shadow-sm mb-4">
@@ -44,7 +48,7 @@
     </div>
 </div>
 
-<div class="alert alert-info py-2">Chỉ hiển thị tối đa 1.000 bản ghi gần nhất. Nhật ký không thể chỉnh sửa hoặc xóa.</div>
+<div class="alert alert-info py-2">Chỉ hiển thị tối đa 1.000 bản ghi gần nhất. Nhật ký tự động xóa sau 30 ngày.</div>
 
 <div class="card shadow-sm">
     <div class="table-responsive">
@@ -96,5 +100,15 @@
     private async Task LoadAsync()
     {
         logs = (await AuditService.SearchAsync(searchText, action, fromDate, toDate)).ToList();
+    }
+
+    private async Task DeleteAllAsync()
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Bạn có chắc muốn xóa toàn bộ nhật ký thao tác? Dữ liệu đã xóa không thể khôi phục.");
+        if (!confirmed) return;
+
+        var deleted = await AuditService.DeleteAllAsync();
+        logs.Clear();
+        await JS.InvokeVoidAsync("alert", $"Đã xóa {deleted} nhật ký thao tác.");
     }
 }

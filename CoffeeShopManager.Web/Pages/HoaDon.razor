@@ -10,7 +10,7 @@
 
 <PageTitle>Danh sách hóa đơn</PageTitle>
 
-<h2>💳 Danh sách hóa đơn</h2>
+<h2><i class="bi bi-credit-card-2-front-fill"></i> Danh sách hóa đơn</h2>
 
 @if (!string.IsNullOrEmpty(errorMessage))
 {
@@ -23,7 +23,7 @@
 @if (!string.IsNullOrEmpty(successMessage))
 {
     <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <strong>✅ Thành công!</strong> @successMessage
+        <strong><i class="bi bi-check-circle-fill"></i> Thành công!</strong> @successMessage
         <button type="button" class="btn-close" @onclick="@(() => successMessage = string.Empty)"></button>
     </div>
 }
@@ -179,7 +179,7 @@ else
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header bg-coffee text-white">
-                    <h5 class="modal-title">💳 Chọn phương thức thanh toán</h5>
+                    <h5 class="modal-title"><i class="bi bi-credit-card-2-front-fill"></i> Chọn phương thức thanh toán</h5>
                     <button type="button" class="btn-close btn-close-white" @onclick="ClosePaymentModal"></button>
                 </div>
                 <div class="modal-body text-center">
@@ -190,12 +190,12 @@ else
                     <h5 class="mb-2">Hóa đơn #@selectedHoaDon.MaHD - Tổng tiền: <span class="text-success">@selectedHoaDon.TongTien.ToString("N0") ₫</span></h5>
                     @if (promotionPreview != null)
                     {
-                        <p class="mb-4 text-success">🎁 Giảm khuyến mãi: <strong>-@tienGiamKhuyenMai.ToString("N0") ₫</strong> | Sau khuyến mãi: <strong>@tongTienSauKhuyenMai.ToString("N0") ₫</strong></p>
+                        <p class="mb-4 text-success"><i class="bi bi-tag-fill"></i> Giảm khuyến mãi: <strong>-@tienGiamKhuyenMai.ToString("N0") ₫</strong> | Sau khuyến mãi: <strong>@tongTienSauKhuyenMai.ToString("N0") ₫</strong></p>
                     }
                     
                     @* Thông tin khách hàng *@
                     <div class="mb-4" style="text-align: left;">
-                        <h6 class="mb-3">📝 Thông tin khách hàng (tùy chọn)</h6>
+                        <h6 class="mb-3"><i class="bi bi-person-lines-fill"></i> Thông tin khách hàng (tùy chọn)</h6>
                         <div class="row g-2 mb-2">
                             <div class="col-md-6">
                                 <label class="form-label">Số điện thoại:</label>
@@ -220,7 +220,7 @@ else
                     @if (activePromotions.Any())
                     {
                         <div class="mb-4" style="text-align: left;">
-                            <label class="form-label">🎁 Khuyến mãi</label>
+                            <label class="form-label"><i class="bi bi-tag-fill"></i> Khuyến mãi</label>
                             <select class="form-select" value="@(selectedPromotionId?.ToString() ?? string.Empty)" @onchange="OnPromotionChanged">
                                 <option value="">-- Không áp dụng khuyến mãi --</option>
                                 @foreach (var promotion in activePromotions)
@@ -478,18 +478,18 @@ else
             if (khachHang != null)
             {
                 customerName = khachHang.TenKH;
-                customerInfoMessage = $"✅ Tìm thấy khách hàng: {khachHang.TenKH} (Điểm tích lũy: {khachHang.DiemTichLuy})";
+                customerInfoMessage = $"Tìm thấy khách hàng: {khachHang.TenKH} (Điểm tích lũy: {khachHang.DiemTichLuy})";
             }
             else
             {
-                customerInfoMessage = "ℹ️ Khách hàng mới. Tên sẽ được tạo tự động nếu không nhập.";
+                customerInfoMessage = "Khách hàng mới. Tên sẽ được tạo tự động nếu không nhập.";
             }
             
             StateHasChanged();
         }
         catch (Exception ex)
         {
-            customerInfoMessage = $"⚠️ Lỗi khi kiểm tra: {ex.Message}";
+            customerInfoMessage = $"Lỗi khi kiểm tra: {ex.Message}";
             StateHasChanged();
         }
     }
