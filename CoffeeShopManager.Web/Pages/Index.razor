@@ -14,9 +14,7 @@
 }
 else
 {
-    <div class="dashboard-topbar">
-        <div class="dashboard-search"><i class="bi bi-search"></i><span>Tìm món, bàn, hóa đơn...</span></div>
-    </div>
+    <div class="dashboard-welcome"><span>Tổng quan</span><p>Theo dõi hoạt động của quán hôm nay.</p></div>
 
     <section class="dashboard-hero">
         <img class="dashboard-hero-image" src="images/coffee-hero.png?v=20260920-0941" alt="Không gian Coffee Shop" />
@@ -40,7 +38,7 @@ else
             @if (!topProducts.Any()) { <p class="text-muted mb-0">Chưa có dữ liệu món bán chạy.</p> }
             else { var rank = 1; @foreach (var item in topProducts.Take(5)) { var percent = topProducts.First().SoLuongBan == 0 ? 0 : Math.Clamp(item.SoLuongBan * 100 / topProducts.First().SoLuongBan, 8, 100); <div class="best-seller-row"><b>@rank</b><div class="best-seller-icon"><i class="bi bi-cup-hot-fill"></i></div><div class="best-seller-name"><strong>@item.TenMon</strong><small>@item.SoLuongBan ly</small></div><div class="best-seller-bar"><span style="width:@percent%"></span></div></div> rank++; } }
         </div></div>
-        <div class="col-xl-5"><div class="dashboard-panel h-100"><div class="dashboard-panel-title"><h3>Doanh thu 7 ngày qua</h3><span>7 ngày qua</span></div><div class="revenue-bars">@foreach (var item in revenueWeek) { var height = maxRevenue == 0 ? 8 : Math.Max(8, (double)(item.TongDoanhThu / maxRevenue * 100)); <div class="revenue-bar-item"><div class="revenue-bar" style="height:@height%" title="@item.TongDoanhThu.ToString("N0") ₫"></div><small>@item.Ngay.ToString("dd/MM")</small></div> }</div><div class="dashboard-mini-stats"><div><i class="bi bi-arrow-up-right"></i><strong>+12%</strong><small>So với tuần trước</small></div><div><i class="bi bi-person-fill"></i><strong>@todayDashboard.SoHoaDon</strong><small>Hóa đơn hôm nay</small></div></div></div></div>
+        <div class="col-xl-5"><div class="dashboard-panel h-100"><div class="dashboard-panel-title"><h3>Doanh thu 7 ngày qua</h3><span>7 ngày qua</span></div><div class="revenue-bars">@foreach (var item in revenueWeek) { var height = maxRevenue == 0 ? 8 : Math.Max(8, (double)(item.TongDoanhThu / maxRevenue * 100)); <div class="revenue-bar-item"><div class="revenue-bar" style="height:@height%" title="@item.TongDoanhThu.ToString("N0") ₫"></div><small>@item.Ngay.ToString("dd/MM")</small></div> }</div><div class="dashboard-mini-stats"><div><i class="bi bi-calendar3"></i><strong>7 ngày</strong><small>Doanh thu gần đây</small></div><div><i class="bi bi-person-fill"></i><strong>@todayDashboard.SoHoaDon</strong><small>Hóa đơn hôm nay</small></div></div></div></div>
         <div class="col-xl-3"><div class="dashboard-panel quick-actions"><h3>Thao tác nhanh</h3><a class="quick-action-primary" href="/goimon"><i class="bi bi-plus-lg"></i> Tạo hóa đơn mới</a><a href="/goimon"><i class="bi bi-cup-straw"></i> Gọi món cho bàn</a><a href="/ban"><i class="bi bi-grid-3x3-gap-fill"></i> Quản lý bàn</a><a href="/khuyenmai"><i class="bi bi-gift-fill"></i> Thêm khuyến mãi</a><img class="dashboard-quote-image" src="images/coffee-quote.png" alt="Life begins after coffee" /></div></div>
     </div>
 }

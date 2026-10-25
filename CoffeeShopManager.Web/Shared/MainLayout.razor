@@ -1,20 +1,24 @@
 @inherits LayoutComponentBase
 @inject NavigationManager NavigationManager
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+<div class="page @(IsLoginPage ? "page-login" : "")">
+    @if (!IsLoginPage)
+    {
+        <div class="sidebar">
+            <NavMenu />
+        </div>
+    }
 
     <main>
         <article class="content px-4">
             @if (ShowSharedBanner)
             {
                 <section class="shared-page-banner" aria-label="Coffee Shop Manager">
-                    <img src="images/coffee-hero.png?v=20260920-0941" alt="Coffee Shop Manager" />
+                    <img src="images/coffee-sections.jpg?v=20261022" alt="Coffee Shop Manager" />
                     <div class="shared-page-banner-content">
                         <small>COFFEE SHOP MANAGER</small>
                         <h1>@SharedBannerTitle</h1>
+                        <p>@SharedBannerDescription</p>
                     </div>
                 </section>
             }
@@ -24,6 +28,9 @@
 </div>
 
 @code {
+    private bool IsLoginPage => NavigationManager.ToBaseRelativePath(NavigationManager.Uri)
+        .Split('?', '#')[0].Trim('/').Equals("login", StringComparison.OrdinalIgnoreCase);
+
     private bool ShowSharedBanner
     {
         get
@@ -36,6 +43,24 @@
             return path is not ("" or "ban" or "login" or "accessdenied");
         }
     }
+
+    private string CurrentPath => NavigationManager.ToBaseRelativePath(NavigationManager.Uri)
+        .Split('?', '#')[0].Trim('/').ToLowerInvariant();
+
+    private string SharedBannerDescription => CurrentPath switch
+    {
+        "mon" => "Quản lý thực đơn và thông tin các món của quán.",
+        "goimon" => "Chọn bàn và ghi nhận các món khách hàng gọi.",
+        "hoadon" => "Theo dõi và quản lý hóa đơn của quán.",
+        "khuyenmai" => "Xem và quản lý các chương trình ưu đãi của quán.",
+        "thongke" => "Theo dõi doanh thu và tình hình kinh doanh.",
+        "nhanvien" => "Quản lý thông tin nhân viên của quán.",
+        "khachhang" => "Quản lý thông tin và lịch sử khách hàng.",
+        "lich-lam-viec" => "Theo dõi lịch làm việc và đăng ký ca.",
+        "account-management" => "Quản lý tài khoản và phân quyền truy cập.",
+        "nhat-ky-hoat-dong" => "Theo dõi các thao tác trong hệ thống.",
+        _ => "Quản lý hoạt động của quán cà phê."
+    };
 
     private string SharedBannerTitle
     {
@@ -50,14 +75,14 @@
             {
                 "mon" => "Quản lý món",
                 "goimon" => "Gọi món",
-                "hoadon" => "Hóa đơn",
-                "khuyenmai" => "Khuyến mãi",
-                "thongke" => "Thống kê",
-                "nhanvien" => "Nhân viên",
-                "khachhang" => "Khách hàng",
+                "hoadon" => "Danh sách hóa đơn",
+                "khuyenmai" => "Quản lý khuyến mãi",
+                "thongke" => "Thống kê doanh thu",
+                "nhanvien" => "Quản lý nhân viên",
+                "khachhang" => "Quản lý khách hàng",
                 "lich-lam-viec" => "Lịch làm việc và đăng ký ca",
                 "account-management" => "Quản lý tài khoản",
-                "nhat-ky-hoat-dong" => "Nhật ký thao tác",
+                "nhat-ky-hoat-dong" => "Nhật ký thao tác người dùng",
                 _ => "Coffee Shop Manager"
             };
         }

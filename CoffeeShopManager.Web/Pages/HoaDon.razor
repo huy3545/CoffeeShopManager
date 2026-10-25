@@ -10,7 +10,6 @@
 
 <PageTitle>Danh sách hóa đơn</PageTitle>
 
-<h2><i class="bi bi-credit-card-2-front-fill"></i> Danh sách hóa đơn</h2>
 
 @if (!string.IsNullOrEmpty(errorMessage))
 {
@@ -28,144 +27,181 @@
     </div>
 }
 
-<div class="card mb-4">
-    <div class="card-body">
-        <div class="row g-3">
+
+@* Bộ lọc ngày *@
+<div class="card mb-3" style="border: 1px solid #ebdccb; border-radius: 10px; background: #faf6f0;">
+    <div class="card-body py-3">
+        <div class="row g-3 align-items-end">
             <div class="col-md-4">
-                <label>Từ ngày:</label>
-                <input type="date" class="form-control" @bind="tuNgay" />
+                <label class="form-label fw-bold small" style="color: #4a2c11;"><i class="bi bi-calendar-event me-1"></i>Từ ngày:</label>
+                <input type="date" class="form-control form-control-sm" @bind="tuNgay" style="border-color: #d9c8b6;" />
             </div>
             <div class="col-md-4">
-                <label>Đến ngày:</label>
-                <input type="date" class="form-control" @bind="denNgay" />
+                <label class="form-label fw-bold small" style="color: #4a2c11;"><i class="bi bi-calendar-check me-1"></i>Đến ngày:</label>
+                <input type="date" class="form-control form-control-sm" @bind="denNgay" style="border-color: #d9c8b6;" />
             </div>
             <div class="col-md-4">
-                <label>&nbsp;</label>
-                <button class="btn btn-primary w-100" @onclick="LoadHoaDonsByDateRange">Lọc</button>
+                <button class="btn btn-sm text-white w-100" style="background: #733910; font-weight: 700; padding: 0.45rem 1rem;" @onclick="LoadHoaDonsByDateRange">
+                    <i class="bi bi-funnel-fill me-1"></i> Lọc hóa đơn
+                </button>
             </div>
         </div>
     </div>
 </div>
 
 @* Tab Navigation *@
-<ul class="nav nav-tabs mb-3">
+<ul class="nav nav-pills mb-3 gap-2">
     <li class="nav-item">
-        <button class="nav-link @(activeTab == "all" ? "active" : "")" @onclick='() => SetActiveTab("all")'>
-            Tất cả
+        <button class="nav-link py-1 px-3 @(activeTab == "all" ? "active" : "")"
+                style="@(activeTab == "all" ? "background:#733910; color:#fff;" : "background:#fff; color:#634731; border:1px solid #ccbba8;") border-radius:20px; font-weight:600; font-size:0.85rem;"
+                @onclick='() => SetActiveTab("all")'>
+            Tất cả (@(hoaDons?.Count ?? 0))
         </button>
     </li>
     <li class="nav-item">
-        <button class="nav-link @(activeTab == "paid" ? "active" : "")" @onclick='() => SetActiveTab("paid")'>
-            Đã thanh toán
+        <button class="nav-link py-1 px-3 @(activeTab == "paid" ? "active" : "")"
+                style="@(activeTab == "paid" ? "background:#733910; color:#fff;" : "background:#fff; color:#634731; border:1px solid #ccbba8;") border-radius:20px; font-weight:600; font-size:0.85rem;"
+                @onclick='() => SetActiveTab("paid")'>
+            Đã thanh toán (@(hoaDons?.Count(h => h.TrangThai == "Đã thanh toán") ?? 0))
         </button>
     </li>
     <li class="nav-item">
-        <button class="nav-link @(activeTab == "unpaid" ? "active" : "")" @onclick='() => SetActiveTab("unpaid")'>
-            Chưa thanh toán
+        <button class="nav-link py-1 px-3 @(activeTab == "unpaid" ? "active" : "")"
+                style="@(activeTab == "unpaid" ? "background:#733910; color:#fff;" : "background:#fff; color:#634731; border:1px solid #ccbba8;") border-radius:20px; font-weight:600; font-size:0.85rem;"
+                @onclick='() => SetActiveTab("unpaid")'>
+            Chưa thanh toán (@(hoaDons?.Count(h => h.TrangThai == "Chưa thanh toán") ?? 0))
         </button>
     </li>
 </ul>
 
 @if (hoaDons == null)
 {
-    <p><em>Đang tải...</em></p>
+    <div class="text-center p-4">
+        <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+        <span class="ms-2 text-muted">Đang tải danh sách hóa đơn...</span>
+    </div>
 }
 else
 {
-    <div class="table-responsive">
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th>Mã HD</th>
-                    <th>Bàn</th>
-                    <th>Thời gian</th>
-                    <th>Tổng tiền</th>
-                    <th>Trạng thái</th>
-                    <th>Phương thức thanh toán</th>
-                    <th>Khách hàng</th>
-                    <th>Nhân viên</th>
-                    <th>Thao tác</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var hd in filteredHoaDons)
-                {
+    <div class="card shadow-sm border-0 mb-4" style="border-radius: 10px; overflow: hidden; border: 1px solid #e8ddd4 !important;">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-size: 0.88rem;">
+                <thead style="background: #733910; color: #fff;">
                     <tr>
-                        <td><strong>#@hd.MaHD</strong></td>
-                        <td>@hd.TenBan</td>
-                        <td>@hd.ThoiGianTao.ToString("HH:mm dd/MM/yyyy")</td>
-                        <td><strong class="text-success">@hd.TongTien.ToString("N0") ₫</strong></td>
-                        <td>
-                            <span class="badge @GetStatusClass(hd.TrangThai)">@hd.TrangThai</span>
-                        </td>
-                        <td>
-                            @if (!string.IsNullOrEmpty(hd.PhuongThucThanhToan))
-                            {
-                                var paymentIcon = hd.PhuongThucThanhToan switch
-                                {
-                                    "Qua ngân hàng" => "🏦",
-                                    "Thanh toán bằng điểm" => "⭐",
-                                    _ => "💵"
-                                };
-                                var paymentBadgeClass = hd.PhuongThucThanhToan switch
-                                {
-                                    "Qua ngân hàng" => "bg-info",
-                                    "Thanh toán bằng điểm" => "bg-warning",
-                                    _ => "bg-secondary"
-                                };
-                                <span class="badge @paymentBadgeClass">
-                                    @paymentIcon @hd.PhuongThucThanhToan
-                                </span>
-                            }
-                            else
-                            {
-                                <span class="text-muted">-</span>
-                            }
-                        </td>
-                        <td>@(hd.TenKH ?? "-")</td>
-                        <td>@(hd.TenNV ?? "-")</td>
-                        <td>
-                            <div class="btn-group" role="group">
-                                @if (hd.TrangThai == "Chưa thanh toán")
-                                {
-                                    <button class="btn btn-sm btn-success" @onclick='() => ShowPaymentMethodModal(hd)'>
-                                        Thanh toán
-                                    </button>
-                                }
-                                @if (hd.TrangThai == "Đã thanh toán")
-                                {
-                                    <button class="btn btn-sm btn-outline-primary" @onclick='() => ShowInvoicePreviewAsync(hd.MaHD)' title="Xem hóa đơn">
-                                        Xem hóa đơn
-                                    </button>
-                                    <button class="btn btn-sm btn-primary" @onclick='() => PrintInvoiceAsync(hd.MaHD)' title="In hóa đơn">
-                                        In hóa đơn
-                                    </button>
-                                    <button class="btn btn-sm btn-danger" @onclick='() => ExportToPdf(hd.MaHD)' title="Lưu PDF">
-                                        📄 PDF
-                                    </button>
-                                }
-                            </div>
-                        </td>
+                        <th style="padding: 0.75rem 0.6rem; width: 85px;">Mã HD</th>
+                        <th style="padding: 0.75rem 0.6rem;">Bàn</th>
+                        <th style="padding: 0.75rem 0.6rem;">Thời gian</th>
+                        <th style="padding: 0.75rem 0.6rem; text-align: right;">Tổng tiền</th>
+                        <th style="padding: 0.75rem 0.6rem; text-align: center;">Trạng thái</th>
+                        <th style="padding: 0.75rem 0.6rem; text-align: center;">Phương thức</th>
+                        <th style="padding: 0.75rem 0.6rem;">Khách hàng</th>
+                        <th style="padding: 0.75rem 0.6rem;">Nhân viên</th>
+                        <th style="padding: 0.75rem 0.6rem; text-align: center; width: 220px;">Thao tác</th>
                     </tr>
-                }
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @if (filteredHoaDons.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="9" class="text-center py-4 text-muted">
+                                <i class="bi bi-inbox" style="font-size: 2rem; color: #cbbaa9;"></i>
+                                <p class="mb-0 mt-2">Không tìm thấy hóa đơn nào trong khoảng thời gian này.</p>
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var hd in filteredHoaDons)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="badge" style="background:#f4ede4; color:#733910; border:1px solid #d9c8b6; font-size:0.82rem;">
+                                        #@hd.MaHD
+                                    </span>
+                                </td>
+                                <td><strong>@hd.TenBan</strong></td>
+                                <td style="color:#666;">@hd.ThoiGianTao.ToString("HH:mm dd/MM/yyyy")</td>
+                                <td style="text-align: right;"><strong style="color: #9c2e10; font-size: 0.95rem;">@hd.TongTien.ToString("N0") ₫</strong></td>
+                                <td style="text-align: center;">
+                                    <span class="badge @GetStatusClass(hd.TrangThai)" style="font-size:0.75rem; padding: 0.35rem 0.6rem; border-radius: 20px;">
+                                        @hd.TrangThai
+                                    </span>
+                                </td>
+                                <td style="text-align: center;">
+                                    @if (!string.IsNullOrEmpty(hd.PhuongThucThanhToan))
+                                    {
+                                        var paymentIcon = hd.PhuongThucThanhToan switch
+                                        {
+                                            "Qua ngân hàng" => "🏦",
+                                            "Thanh toán bằng điểm" => "⭐",
+                                            _ => "💵"
+                                        };
+                                        <span class="badge" style="background: #eef2f5; color: #3b4b59; border: 1px solid #ccd6de; font-size: 0.76rem; border-radius: 20px;">
+                                            @paymentIcon @hd.PhuongThucThanhToan
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td>@(hd.TenKH ?? "-")</td>
+                                <td>@(hd.TenNV ?? "-")</td>
+                                <td style="text-align: center;">
+                                    <div class="btn-group" role="group">
+                                        @if (hd.TrangThai == "Chưa thanh toán")
+                                        {
+                                            <button class="btn btn-sm btn-success" @onclick='() => ShowPaymentMethodModal(hd)'>
+                                                <i class="bi bi-credit-card-fill me-1"></i> Thanh toán
+                                            </button>
+                                        }
+                                        @if (hd.TrangThai == "Đã thanh toán")
+                                        {
+                                            <button class="btn btn-sm btn-outline-secondary" @onclick='() => ShowInvoicePreviewAsync(hd.MaHD)' title="Xem chi tiết hóa đơn">
+                                                <i class="bi bi-eye"></i> Xem
+                                            </button>
+                                            <button class="btn btn-sm text-white" style="background:#733910;" @onclick='() => PrintInvoiceAsync(hd.MaHD)' title="In hóa đơn">
+                                                <i class="bi bi-printer"></i> In
+                                            </button>
+                                            <button class="btn btn-sm text-white" style="background:#a93226;" @onclick='() => ExportToPdf(hd.MaHD)' title="Lưu PDF">
+                                                <i class="bi bi-file-earmark-pdf"></i> PDF
+                                            </button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
     </div>
 
-    <div class="row mt-4">
+    @* Card Thống Kê Doanh Thu *@
+    <div class="row g-3 mb-4">
         <div class="col-md-6">
-            <div class="card">
-                <div class="card-body text-center">
-                    <h6>Tổng số hóa đơn</h6>
-                    <h3>@filteredHoaDons.Count</h3>
+            <div class="card p-3" style="border: 1px solid #ebdccb; border-radius: 10px; background: #faf6f0;">
+                <div class="d-flex align-items-center gap-3">
+                    <div style="width: 48px; height: 48px; border-radius: 10px; background: #733910; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
+                        <i class="bi bi-receipt"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small fw-bold">Tổng số hóa đơn lọc</div>
+                        <h4 class="mb-0 fw-bold" style="color: #4a2c11;">@filteredHoaDons.Count</h4>
+                    </div>
                 </div>
             </div>
         </div>
         <div class="col-md-6">
-            <div class="card">
-                <div class="card-body text-center">
-                    <h6>Tổng doanh thu</h6>
-                    <h3 class="text-success">@filteredHoaDons.Where(h => h.TrangThai == "Đã thanh toán").Sum(h => h.TongTien).ToString("N0") ₫</h3>
+            <div class="card p-3" style="border: 1px solid #ebdccb; border-radius: 10px; background: #faf6f0;">
+                <div class="d-flex align-items-center gap-3">
+                    <div style="width: 48px; height: 48px; border-radius: 10px; background: #2e7d32; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
+                        <i class="bi bi-cash-stack"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small fw-bold">Tổng doanh thu (Đã thanh toán)</div>
+                        <h4 class="mb-0 fw-bold text-success">@filteredHoaDons.Where(h => h.TrangThai == "Đã thanh toán").Sum(h => h.TongTien).ToString("N0") ₫</h4>
+                    </div>
                 </div>
             </div>
         </div>
@@ -295,36 +331,90 @@ else
                     <button type="button" class="btn-close btn-close-white" @onclick="CloseInvoicePreview"></button>
                 </div>
                 <div class="modal-body">
-                    <div id="invoice-print-area" class="invoice-print-area">
+                    <div id="invoice-print-area" class="invoice-print-area" style="max-width: 480px; margin: 0 auto; background: #fff; padding: 2rem 1.75rem; border: 1px solid #dfd3c3; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.06);">
                         <div class="text-center mb-3">
-                            <h3 class="mb-1">COFFEE SHOP MANAGER</h3>
-                            <div>HÓA ĐƠN THANH TOÁN</div>
+                            <h4 class="mb-1 fw-bold" style="color: #4a2c11; letter-spacing: 0.05em;">☕ GUINN COFFEE</h4>
+                            <div class="small text-muted">Coffee Shop Manager &amp; Bakery</div>
+                            <div class="small text-muted">Đ/c: TP. Hồ Chí Minh • Hotline: 1900 8888</div>
+                            <div class="mt-2 py-1 fw-bold" style="border-top: 1px dashed #aaa; border-bottom: 1px dashed #aaa; letter-spacing: 0.08em; color: #733910;">
+                                HÓA ĐƠN THANH TOÁN
+                            </div>
                         </div>
-                        <div class="row mb-3">
-                            <div class="col-6">Mã hóa đơn: <strong>#@invoiceForPrint.MaHD</strong></div>
-                            <div class="col-6 text-end">@invoiceForPrint.ThoiGianTao.ToString("dd/MM/yyyy HH:mm")</div>
-                            <div class="col-6">Bàn: <strong>@invoiceForPrint.TenBan</strong></div>
-                            <div class="col-6 text-end">Nhân viên: @(invoiceForPrint.TenNV ?? "-")</div>
-                            <div class="col-12">Khách hàng: @(invoiceForPrint.TenKH ?? "Khách lẻ")</div>
+
+                        <div class="small mb-3" style="color: #444; line-height: 1.6;">
+                            <div class="d-flex justify-content-between">
+                                <span>Mã hóa đơn: <strong>#@invoiceForPrint.MaHD</strong></span>
+                                <span>@invoiceForPrint.ThoiGianTao.ToString("dd/MM/yyyy HH:mm")</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>Bàn phục vụ: <strong>@invoiceForPrint.TenBan</strong></span>
+                                <span>Thu ngân: <strong>@(invoiceForPrint.TenNV ?? "Staff")</strong></span>
+                            </div>
+                            <div>Khách hàng: <strong>@(invoiceForPrint.TenKH ?? "Khách lẻ")</strong></div>
                         </div>
-                        <table class="table table-sm invoice-table">
-                            <thead><tr><th>Món</th><th class="text-center">SL</th><th class="text-end">Đơn giá</th><th class="text-end">Thành tiền</th></tr></thead>
+
+                        <table class="table table-sm mb-2" style="font-size: 0.85rem; border-color: #ddd;">
+                            <thead style="border-top: 1px dashed #999; border-bottom: 1px dashed #999;">
+                                <tr>
+                                    <th>Món</th>
+                                    <th class="text-center" style="width: 40px;">SL</th>
+                                    <th class="text-end" style="width: 80px;">Đơn giá</th>
+                                    <th class="text-end" style="width: 90px;">Thành tiền</th>
+                                </tr>
+                            </thead>
                             <tbody>
                                 @foreach (var item in invoiceForPrint.ChiTiets)
                                 {
-                                    <tr><td>@item.TenMon</td><td class="text-center">@item.SoLuong</td><td class="text-end">@item.DonGia.ToString("N0") ₫</td><td class="text-end">@item.ThanhTien.ToString("N0") ₫</td></tr>
+                                    <tr>
+                                        <td>@item.TenMon</td>
+                                        <td class="text-center">@item.SoLuong</td>
+                                        <td class="text-end">@item.DonGia.ToString("N0")</td>
+                                        <td class="text-end fw-bold">@item.ThanhTien.ToString("N0")</td>
+                                    </tr>
                                 }
                             </tbody>
                         </table>
-                        <div class="invoice-total text-end">
-                            <div>Tổng tiền trước giảm: <strong>@(invoiceForPrint.TongTien + invoiceForPrint.TienGiamKhuyenMai + invoiceForPrint.TienGiamTuDiem).ToString("N0") ₫</strong></div>
-                            <div>Giảm khuyến mãi: <strong>-@invoiceForPrint.TienGiamKhuyenMai.ToString("N0") ₫</strong></div>
-                            <div>Giảm từ điểm: <strong>-@invoiceForPrint.TienGiamTuDiem.ToString("N0") ₫</strong></div>
-                            <h5 class="mt-2">Tổng thanh toán: @invoiceForPrint.TongTien.ToString("N0") ₫</h5>
-                            <div>Phương thức: @(invoiceForPrint.PhuongThucThanhToan ?? "-")</div>
-                            <div>Trạng thái: @invoiceForPrint.TrangThai</div>
+
+                        <div class="small pt-2" style="border-top: 1px dashed #999; line-height: 1.7;">
+                            @if (invoiceForPrint.TienGiamKhuyenMai > 0 || invoiceForPrint.TienGiamTuDiem > 0)
+                            {
+                                <div class="d-flex justify-content-between">
+                                    <span>Tổng tiền trước giảm:</span>
+                                    <span>@((invoiceForPrint.TongTien + invoiceForPrint.TienGiamKhuyenMai + invoiceForPrint.TienGiamTuDiem).ToString("N0")) ₫</span>
+                                </div>
+                            }
+                            @if (invoiceForPrint.TienGiamKhuyenMai > 0)
+                            {
+                                <div class="d-flex justify-content-between text-success">
+                                    <span>Giảm khuyến mãi:</span>
+                                    <span>-@invoiceForPrint.TienGiamKhuyenMai.ToString("N0") ₫</span>
+                                </div>
+                            }
+                            @if (invoiceForPrint.TienGiamTuDiem > 0)
+                            {
+                                <div class="d-flex justify-content-between text-info">
+                                    <span>Giảm từ điểm tích lũy:</span>
+                                    <span>-@invoiceForPrint.TienGiamTuDiem.ToString("N0") ₫</span>
+                                </div>
+                            }
+                            <div class="d-flex justify-content-between align-items-center mt-2 pt-1" style="border-top: 1px solid #eee;">
+                                <span class="fw-bold fs-6" style="color: #4a2c11;">TỔNG THANH TOÁN:</span>
+                                <span class="fw-bold fs-5" style="color: #9c2e10;">@invoiceForPrint.TongTien.ToString("N0") ₫</span>
+                            </div>
+                            <div class="d-flex justify-content-between text-muted mt-1">
+                                <span>Phương thức:</span>
+                                <strong>@(invoiceForPrint.PhuongThucThanhToan ?? "Tiền mặt")</strong>
+                            </div>
+                            <div class="d-flex justify-content-between text-muted">
+                                <span>Trạng thái:</span>
+                                <span class="badge bg-success">@invoiceForPrint.TrangThai</span>
+                            </div>
                         </div>
-                        <div class="text-center mt-4">Cảm ơn quý khách!</div>
+
+                        <div class="text-center mt-4 pt-2 small text-muted" style="border-top: 1px dashed #bbb;">
+                            <div class="fw-bold" style="color: #733910;">🤎 Cảm ơn quý khách và hẹn gặp lại! 🤎</div>
+                            <div style="font-size: 0.75rem;">Wifi: Guinn Coffee • Pass: 88888888</div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer invoice-preview-actions">

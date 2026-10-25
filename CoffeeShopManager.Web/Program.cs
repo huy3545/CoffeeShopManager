@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using System.IO;
 using System.Linq;
+using Microsoft.AspNetCore.HttpOverrides;
 using CoffeeShopManager.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -214,11 +215,16 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<CoffeeShopDbContext>();
     await db.Database.MigrateAsync();
-    if (app.Environment.IsDevelopment())
+    if (app.Environment.IsDevelopment() || !string.IsNullOrEmpty(builder.Configuration["InitialAdmin:Password"]))
     {
-        await SeedIdentityAsync(scope.ServiceProvider);
+        await SeedIdentityAsync(scope.ServiceProvider, builder.Configuration["InitialAdmin:Password"]);
     }
 }
+
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
 
 // Configure the HTTP request pipeline
 if (!app.Environment.IsDevelopment())
@@ -319,7 +325,7 @@ static async Task TryWriteAuditAsync(INhatKyHoatDongService auditService, string
     }
 }
 
-static async Task SeedIdentityAsync(IServiceProvider services)
+static async Task SeedIdentityAsync(IServiceProvider services, string? initialPassword)
 {
     var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
     var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
@@ -343,8 +349,20 @@ static async Task SeedIdentityAsync(IServiceProvider services)
 
     foreach (var account in accounts)
     {
-        if (await userManager.FindByNameAsync(account.UserName) is not null)
+        var existingUser = await userManager.FindByNameAsync(account.UserName);
+        if (existingUser is not null)
+        {
+            if (initialPassword is not null)
+            {
+                var token = await userManager.GeneratePasswordResetTokenAsync(existingUser);
+                var resetResult = await userManager.ResetPasswordAsync(existingUser, token, initialPassword);
+                if (!resetResult.Succeeded)
+                    throw new InvalidOperationException(string.Join("; ", resetResult.Errors.Select(e => e.Description)));
+                if (!await userManager.IsInRoleAsync(existingUser, account.Role))
+                    await userManager.AddToRoleAsync(existingUser, account.Role);
+            }
             continue;
+        }
 
         var user = new ApplicationUser
         {
@@ -354,7 +372,7 @@ static async Task SeedIdentityAsync(IServiceProvider services)
             MaNV = account.MaNV
         };
 
-        var createResult = await userManager.CreateAsync(user, "CoffeeShop123!");
+        var createResult = await userManager.CreateAsync(user, initialPassword ?? "CoffeeShop123!");
         if (!createResult.Succeeded)
             throw new InvalidOperationException(string.Join("; ", createResult.Errors.Select(e => e.Description)));
 
